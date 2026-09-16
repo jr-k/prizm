@@ -109,6 +109,7 @@ actor SyncRepositoryImpl: SyncRepository {
         // Phase 2b: Populate the per-cipher key cache from keys collected during decryptList.
         // Only ciphers with a per-item key are included; vault-key-only ciphers are handled
         // by VaultKeyServiceImpl's fallback path.
+        try Task.checkCancellation()
         await vaultKeyCache.populate(keys: cipherKeyMap)
         logger.info("VaultKeyCache populated with \(cipherKeyMap.count, privacy: .public) per-item key(s)")
 
@@ -147,6 +148,7 @@ actor SyncRepositoryImpl: SyncRepository {
 
                 // Unwrap each org key into OrgKeyCache.
                 // Failure for a single org is logged and skipped; other orgs proceed.
+                try Task.checkCancellation()
                 await orgKeyCache.clear()  // Fresh slate for this sync.
                 for rawOrg in syncResponse.organizations {
                     do {
@@ -154,7 +156,10 @@ actor SyncRepositoryImpl: SyncRepository {
                             encOrgKey: rawOrg.key,
                             rsaPrivateKey: rsaPrivateKeyBytes
                         )
+                        try Task.checkCancellation()
                         await orgKeyCache.store(key: orgKeys, for: rawOrg.id)
+                    } catch is CancellationError {
+                        throw CancellationError()
                     } catch {
                         logger.fault("Failed to unwrap org key for org \(rawOrg.id.prefix(8), privacy: .public)… - org ciphers will be skipped: \(error, privacy: .public)")
                     }
@@ -218,9 +223,12 @@ actor SyncRepositoryImpl: SyncRepository {
                     }
                 }
                 // Refresh the VaultKeyCache to include per-item keys from org ciphers.
+                try Task.checkCancellation()
                 await vaultKeyCache.populate(keys: cipherKeyMap)
 
                 logger.info("Org sync: \(organizations.count) org(s), \(collections.count) collection(s), \(orgCipherFailedCount, privacy: .public) org cipher(s) skipped")
+            } catch is CancellationError {
+                throw CancellationError()
             } catch {
                 logger.error("Org key sync failed - org ciphers unavailable this session: \(error, privacy: .public)")
                 // Non-fatal: personal items still work without org support.
@@ -228,6 +236,7 @@ actor SyncRepositoryImpl: SyncRepository {
         }
 
         // Phase 3: Populate the in-memory vault store.
+        try Task.checkCancellation()
         let syncedAt = Date()
         await vaultRepository.populate(
             items:         items,

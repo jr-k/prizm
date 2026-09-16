@@ -232,11 +232,13 @@ actor PrizmCryptoServiceImpl: PrizmCryptoService {
         // which key material exists in a heap dump (Constitution §III). Any Data copies
         // passed to in-flight decryption tasks retain their own CoW buffers until those
         // tasks complete; those copies cannot be zeroed here.
-        if keys != nil {
-            keys!.encryptionKey.resetBytes(in: 0..<keys!.encryptionKey.count)
-            keys!.macKey.resetBytes(in: 0..<keys!.macKey.count)
+        if var vaultKeys = keys {
+            // Release actor storage first, then mutate the local buffers. Nested
+            // mutation through Optional's _modify accessor can corrupt Data CoW storage.
+            keys = nil
+            vaultKeys.encryptionKey.resetBytes(in: vaultKeys.encryptionKey.indices)
+            vaultKeys.macKey.resetBytes(in: vaultKeys.macKey.indices)
         }
-        keys = nil
         logger.info("Vault locked - key material zeroed")
     }
 

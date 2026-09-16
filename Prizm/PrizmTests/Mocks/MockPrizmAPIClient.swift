@@ -51,7 +51,17 @@ actor MockPrizmAPIClient: PrizmAPIClientProtocol {
         storedAccessToken = token
     }
 
+    func activateSession(baseURL: URL, accessToken: String?) {
+        self.baseURL = baseURL
+        storedAccessToken = accessToken
+    }
+
     func clearAccessToken() {
+        storedAccessToken = nil
+    }
+
+    func invalidateSession() {
+        baseURL = nil
         storedAccessToken = nil
     }
 

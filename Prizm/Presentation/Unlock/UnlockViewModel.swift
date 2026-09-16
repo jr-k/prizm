@@ -30,6 +30,7 @@ final class UnlockViewModel: ObservableObject {
     @Published private(set) var flowState: UnlockFlowState = .unlock
     @Published var showEnrollmentPrompt: Bool = false
     @Published private(set) var enrollmentReason: EnrollmentReason = .firstTime
+    @Published private(set) var lastSyncSucceeded = false
 
     // MARK: - Dependencies
 
@@ -38,6 +39,7 @@ final class UnlockViewModel: ObservableObject {
     private let account:          Account
     private let embeddedBiometric: (any EmbeddedBiometricUnlock)?
     private let logger = Logger(subsystem: "com.prizm", category: "UnlockViewModel")
+    private var flowTask: Task<Void, Never>?
 
     /// Tracks whether the last biometric attempt failed with invalidation,
     /// so the enrollment prompt can show the re-enroll copy.
@@ -89,13 +91,17 @@ final class UnlockViewModel: ObservableObject {
             return
         }
 
-        Task {
+        flowTask?.cancel()
+        flowTask = Task {
             do {
                 _ = try await auth.unlockWithPassword(passwordData)
+                try Task.checkCancellation()
                 // Clear the password field after a successful unlock so the plaintext
                 // does not linger in the published property.
                 password = ""
                 await checkEnrollmentOrSync()
+            } catch is CancellationError {
+                return
             } catch let err as AuthError {
                 logger.error("Unlock failed: \(err.localizedDescription, privacy: .public)")
                 if err == .invalidCredentials {
@@ -116,11 +122,15 @@ final class UnlockViewModel: ObservableObject {
     /// On cancellation, re-arms the sensor immediately (always-armed behaviour -
     /// design Decision 2). On lockout or invalidation, shows an error and stops.
     func unlockWithBiometrics() {
-        Task {
+        flowTask?.cancel()
+        flowTask = Task {
             do {
                 _ = try await auth.unlockWithBiometrics()
+                try Task.checkCancellation()
                 lastBiometricInvalidated = false
                 await checkEnrollmentOrSync()
+            } catch is CancellationError {
+                return
             } catch let err as AuthError where err == .biometricInvalidated {
                 lastBiometricInvalidated = true
                 errorMessage = err.errorDescription
@@ -151,11 +161,15 @@ final class UnlockViewModel: ObservableObject {
     /// `evaluatePolicy` is called - no system modal appears.
     func triggerEmbeddedBiometricIfAvailable() {
         guard biometricUnlockAvailable, let provider = embeddedBiometric else { return }
-        Task {
+        flowTask?.cancel()
+        flowTask = Task {
             do {
                 _ = try await provider.unlockWithBiometrics(context: biometricContext)
+                try Task.checkCancellation()
                 lastBiometricInvalidated = false
                 await checkEnrollmentOrSync()
+            } catch is CancellationError {
+                return
             } catch let err as AuthError where err == .biometricInvalidated {
                 lastBiometricInvalidated = true
                 errorMessage = err.errorDescription
@@ -197,13 +211,14 @@ final class UnlockViewModel: ObservableObject {
 
     /// Called when the user accepts the enrollment prompt.
     func confirmEnrollBiometric() {
-        Task {
+        flowTask?.cancel()
+        flowTask = Task {
             do {
                 try await auth.enableBiometricUnlock()
             } catch {
                 logger.error("Enable biometric unlock failed: \(error.localizedDescription, privacy: .public)")
             }
-            UserDefaults.standard.set(true, forKey: "biometricEnrollmentPromptShown")
+            auth.setBiometricEnrollmentPromptShown(true)
             showEnrollmentPrompt = false
             await performSync()
         }
@@ -211,22 +226,27 @@ final class UnlockViewModel: ObservableObject {
 
     /// Called when the user dismisses the enrollment prompt without enabling.
     func dismissEnrollmentPrompt() {
-        UserDefaults.standard.set(true, forKey: "biometricEnrollmentPromptShown")
+        auth.setBiometricEnrollmentPromptShown(true)
         showEnrollmentPrompt = false
-        Task { await performSync() }
+        flowTask?.cancel()
+        flowTask = Task { await performSync() }
     }
 
-    /// Clears session and returns to the login screen (FR-039).
+    /// Keeps retained profiles and opens the add-account login flow.
     func signInWithDifferentAccount() {
         logger.info("User switching to different account")
+        cancelPendingFlow()
         Task {
-            do {
-                try await auth.signOut()
-            } catch {
-                logger.error("Sign-out failed: \(error.localizedDescription, privacy: .public)")
-            }
+            await auth.lockVault()
             flowState = .login
         }
+    }
+
+    func cancelPendingFlow() {
+        flowTask?.cancel()
+        biometricContext.invalidate()
+        password = ""
+        errorMessage = nil
     }
 
     // MARK: - Private
@@ -238,8 +258,8 @@ final class UnlockViewModel: ObservableObject {
     /// is mockable in tests and independent of the UserDefaults enabled flag.
     private func checkEnrollmentOrSync() async {
         let capable        = auth.deviceBiometricCapable
-        let alreadyEnabled = UserDefaults.standard.bool(forKey: "biometricUnlockEnabled")
-        let promptShown    = UserDefaults.standard.bool(forKey: "biometricEnrollmentPromptShown")
+        let alreadyEnabled = auth.biometricUnlockAvailable
+        let promptShown    = auth.biometricEnrollmentPromptShown
 
         if capable && !alreadyEnabled && !promptShown {
             enrollmentReason    = lastBiometricInvalidated ? .reEnrollAfterInvalidation : .firstTime
@@ -251,12 +271,17 @@ final class UnlockViewModel: ObservableObject {
     }
 
     private func performSync() async {
+        lastSyncSucceeded = false
         flowState = .syncing(message: "Preparing…")
         do {
             _ = try await sync.execute(progress: { [weak self] message in
                 Task { @MainActor [weak self] in self?.flowState = .syncing(message: message) }
             })
+            try Task.checkCancellation()
+            lastSyncSucceeded = true
             flowState = .vault
+        } catch is CancellationError {
+            return
         } catch {
             logger.error("Post-unlock sync failed (non-fatal): \(error.localizedDescription, privacy: .public)")
             flowState = .vault

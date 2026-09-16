@@ -19,7 +19,7 @@ actor FaviconLoader {
     // MARK: - Dependencies
 
     private let session:  URLSession
-    private let iconsBase: URL
+    private var iconsBase: URL
     private let logger = Logger(subsystem: "com.prizm", category: "FaviconLoader")
 
     // MARK: - In-memory cache
@@ -76,6 +76,12 @@ actor FaviconLoader {
 
     /// Clears the in-memory cache (e.g. on sign-out or low-memory warning).
     func clearCache() {
+        cache.removeAllObjects()
+    }
+
+    func configure(iconsBase: URL) {
+        guard self.iconsBase != iconsBase else { return }
+        self.iconsBase = iconsBase
         cache.removeAllObjects()
     }
 }

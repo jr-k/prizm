@@ -107,8 +107,8 @@ final class AppContainer: ObservableObject {
         // Resolve the stored account email for per-account timestamp scoping.
         // Falls back to an empty string if no account is stored yet (first launch before login);
         // the timestamp will be recorded under the correct key after login completes.
-        let accountEmail = auth.storedAccount()?.email ?? ""
-        let syncTimestamp = SyncTimestampRepositoryImpl(email: accountEmail)
+        let accountProfileId = auth.activeAccount()?.profileId ?? UUID()
+        let syncTimestamp = SyncTimestampRepositoryImpl(profileId: accountProfileId)
 
         self.apiClient       = api
         self.crypto          = crypto
@@ -116,7 +116,10 @@ final class AppContainer: ObservableObject {
         self.keychain        = keychain
         self.biometricKeychain = biometricKeychain
         self.vaultStore      = vault
-        self.faviconLoader   = FaviconLoader()
+        self.faviconLoader   = FaviconLoader(
+            iconsBase: auth.activeAccount()?.serverEnvironment.iconsURL
+                ?? URL(string: "https://icons.bitwarden.net")!
+        )
         self.vaultKeyCache   = keyCache
         self.orgKeyCache     = orgKeyCache
         self.authRepository  = auth
@@ -157,13 +160,13 @@ final class AppContainer: ObservableObject {
     // MARK: - Factories
 
     /// Returns a fresh `SyncTimestampRepository` and matching `GetLastSyncDateUseCase`
-    /// scoped to the given account email.
+    /// scoped to the given local account profile.
     ///
     /// Called by `RootViewModel` after a successful login or unlock to ensure the
     /// `VaultBrowserViewModel` is always scoped to the correct account - not the
     /// fallback empty-email instance created before any account was known.
-    func makeSyncTimestampDependencies(for email: String) -> (repository: any SyncTimestampRepository, useCase: any GetLastSyncDateUseCase) {
-        let repo = SyncTimestampRepositoryImpl(email: email)
+    func makeSyncTimestampDependencies(for profileId: UUID) -> (repository: any SyncTimestampRepository, useCase: any GetLastSyncDateUseCase) {
+        let repo = SyncTimestampRepositoryImpl(profileId: profileId)
         return (repo, GetLastSyncDateUseCaseImpl(repository: repo))
     }
 

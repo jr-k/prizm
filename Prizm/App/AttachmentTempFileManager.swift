@@ -90,6 +90,17 @@ final class AttachmentTempFileManager: TempFileManaging, @unchecked Sendable {
         }
     }
 
+    func cleanupAll() {
+        lock.lock()
+        let allEntries = entries
+        entries.removeAll()
+        lock.unlock()
+
+        for entry in allEntries {
+            zeroAndDelete(entry.url)
+        }
+    }
+
     // MARK: - Private
 
     /// Overwrites the file at `url` with zeros then deletes it.

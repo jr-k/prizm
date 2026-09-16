@@ -23,4 +23,8 @@ protocol TempFileManaging: AnyObject, Sendable {
     /// Called on each foreground transition and by a scheduled background task spawned
     /// by `AttachmentRowViewModel` 30 seconds after `register(url:)`.
     func cleanup()
+
+    /// Immediately zeroes and deletes every registered file.
+    /// Used when crossing an account or vault security boundary.
+    func cleanupAll()
 }

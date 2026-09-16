@@ -5,11 +5,11 @@ import os.log
 
 /// Persists the last successful vault sync timestamp to `UserDefaults`.
 ///
-/// - Storage: `UserDefaults`, keyed per account email. Not a secret - no Keychain needed.
+/// - Storage: `UserDefaults`, keyed per local account profile. Not a secret.
 /// - Thread safety: implemented as an `actor` (CLAUDE.md: actor for shared mutable state in
 ///   the Data layer) to guard against concurrent reads/writes from the sync completion path
 ///   and the ViewModel load path.
-/// - Key format: `com.prizm.lastSyncDate.<email>` - scoped per account so that
+/// - Key format: `com.prizm.lastSyncDate.<profileId>` - scoped per account so that
 ///   switching accounts never shows a timestamp from a previous session.
 /// - Format: ISO-8601 string via `ISO8601DateFormatter` - human-readable in developer tools.
 actor SyncTimestampRepositoryImpl: SyncTimestampRepository {
@@ -38,13 +38,12 @@ actor SyncTimestampRepositoryImpl: SyncTimestampRepository {
     }()
 
     /// - Parameters:
-    ///   - email: The account email used to scope the UserDefaults key. Lowercased before use
-    ///     to match the Bitwarden server's email normalisation convention, so different
-    ///     casings of the same address map to a single key.
+    ///   - profileId: Stable local profile identity. Unlike email, it cannot collide
+    ///     between independent self-hosted instances.
     ///   - defaults: The `UserDefaults` suite to write to. Defaults to `.standard`.
     ///     Pass a test-suite instance in unit tests to avoid polluting real defaults.
-    init(email: String, defaults: UserDefaults = .standard) {
-        self.key      = "com.prizm.lastSyncDate.\(email.lowercased())"
+    init(profileId: UUID, defaults: UserDefaults = .standard) {
+        self.key      = "com.prizm.lastSyncDate.\(profileId.uuidString)"
         self.defaults = defaults
     }
 

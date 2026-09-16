@@ -53,9 +53,8 @@ actor VaultKeyCache {
     /// This is required for immediate attachment uploads, especially for organization
     /// items whose effective key differs from the user's personal vault key.
     func store(key: Data, for cipherId: String) {
-        let existingCount = cache[cipherId]?.count ?? 0
-        if existingCount > 0 {
-            cache[cipherId]?.resetBytes(in: 0..<existingCount)
+        if var existing = cache.removeValue(forKey: cipherId) {
+            existing.resetBytes(in: existing.indices)
         }
         cache[cipherId] = key
     }
@@ -66,16 +65,12 @@ actor VaultKeyCache {
     /// Zeroing before clearing reduces the window during which key bytes remain on the
     /// heap after the cache is discarded (Constitution §III).
     func clear() {
-        // Pre-capture count before starting the _modify accessor: accessing cache[key]
-        // inside the resetBytes argument while _modify already holds exclusive write
-        // access to cache[key] causes a simultaneous-access violation at runtime.
-        for key in cache.keys {
-            let count = cache[key]?.count ?? 0
-            if count > 0 {
-                cache[key]?.resetBytes(in: 0..<count)
-            }
+        // Remove values before zeroing them. Mutating Data through Dictionary's
+        // optional _modify accessor can corrupt its CoW backing storage on macOS 26.
+        while let entry = cache.popFirst() {
+            var keyData = entry.value
+            keyData.resetBytes(in: keyData.indices)
         }
-        cache.removeAll()
         logger.info("VaultKeyCache cleared - key material zeroed")
     }
 }

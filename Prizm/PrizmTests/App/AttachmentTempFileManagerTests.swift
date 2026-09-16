@@ -91,6 +91,18 @@ final class AttachmentTempFileManagerTests: XCTestCase {
             "Fresh file should remain")
     }
 
+    func test_cleanupAll_deletesFilesBeforeDeadline() {
+        let url = makeTempFile()
+        sut.register(url: url, deleteAfter: Date().addingTimeInterval(30))
+
+        sut.cleanupAll()
+
+        XCTAssertFalse(
+            FileManager.default.fileExists(atPath: url.path),
+            "Account switching must immediately remove every plaintext temporary file"
+        )
+    }
+
     // MARK: - Multiple cleanups
 
     func test_cleanup_idempotent_doesNotCrashOnMissingFile() {

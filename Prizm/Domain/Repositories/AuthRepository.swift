@@ -59,11 +59,22 @@ protocol AuthRepository: AnyObject {
 
     // MARK: - Session
 
-    /// Returns the stored `Account` from Keychain, or nil if no session exists.
+    /// Returns every locally retained account profile.
+    func storedAccounts() -> [Account]
+
+    /// Returns the active account profile, or nil if no profile is selected.
+    func activeAccount() -> Account?
+
+    /// Selects a retained profile without unlocking its vault.
+    func activateAccount(profileId: UUID) async throws
+
+    /// Deletes one retained profile and its local credentials.
+    func removeAccount(profileId: UUID) async throws
+
+    /// Backwards-compatible alias for `activeAccount()`.
     func storedAccount() -> Account?
 
-    /// Clears all per-user Keychain keys and resets in-memory state.
-    /// Called on explicit sign-out. Triggers transition to blank `LoginView`.
+    /// Removes the active account profile and resets in-memory state.
     func signOut() async throws
 
     // MARK: - Lock
@@ -82,6 +93,12 @@ protocol AuthRepository: AnyObject {
     /// Whether biometric unlock is available (enabled in preferences AND device supports biometrics).
     /// Fast synchronous check suitable for UI binding - does NOT read the Keychain.
     var biometricUnlockAvailable: Bool { get }
+
+    /// Whether the enrollment offer has already been handled for the active profile.
+    var biometricEnrollmentPromptShown: Bool { get }
+
+    /// Records enrollment-offer completion for the active profile.
+    func setBiometricEnrollmentPromptShown(_ shown: Bool)
 
     /// Stores the current vault symmetric key in a biometric-protected Keychain item.
     /// Requires the vault to be unlocked (keys in memory).

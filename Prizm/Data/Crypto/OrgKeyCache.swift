@@ -53,18 +53,15 @@ actor OrgKeyCache {
     /// Zeroing before clearing reduces the window during which key bytes remain on the
     /// heap after the cache is discarded (Constitution §III).
     func clear() {
-        // Zero encryptionKey and macKey data for each cached org key.
-        // We capture the byte counts before mutating to avoid overlapping accesses
-        // to the dictionary subscript (Swift exclusivity enforcement).
-        // Note: Swift's CoW semantics mean true in-place zeroing cannot be guaranteed
-        // at the language level. This is a known limitation documented in SECURITY.md.
-        for key in cache.keys {
-            let encCount = cache[key]?.encryptionKey.count ?? 0
-            let macCount = cache[key]?.macKey.count ?? 0
-            cache[key]?.encryptionKey.resetBytes(in: 0..<encCount)
-            cache[key]?.macKey.resetBytes(in: 0..<macCount)
+        // Remove each value from the dictionary before mutating its Data buffers.
+        // Mutating nested Data through Dictionary's optional _modify accessor corrupts
+        // the CoW storage on macOS 26 and crashes inside Data.resetBytes(in:).
+        while let (_, keys) = cache.popFirst() {
+            var encryptionKey = keys.encryptionKey
+            var macKey = keys.macKey
+            encryptionKey.resetBytes(in: encryptionKey.indices)
+            macKey.resetBytes(in: macKey.indices)
         }
-        cache.removeAll()
         logger.info("OrgKeyCache cleared - key material zeroed")
     }
 }

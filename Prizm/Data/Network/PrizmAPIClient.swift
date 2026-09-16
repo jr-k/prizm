@@ -22,11 +22,17 @@ protocol PrizmAPIClientProtocol: Actor {
     /// Stores the access token used for subsequent authenticated requests.
     func setAccessToken(_ token: String)
 
+    /// Atomically selects the endpoint and bearer token for one account session.
+    func activateSession(baseURL: URL, accessToken: String?)
+
     /// Clears the in-memory access token.
     ///
     /// - Security goal: removes the bearer token from memory on sign-out so it cannot
     ///   be read from a heap dump after the session ends (Constitution §III).
     func clearAccessToken()
+
+    /// Invalidates in-flight work and clears all account-bound network state.
+    func invalidateSession()
 
     /// POST `/accounts/prelogin` - returns KDF parameters for the given email.
     /// Used to derive the master key before posting credentials to `/connect/token`.
@@ -304,6 +310,8 @@ nonisolated enum APIError: Error, Equatable {
     case decodingFailed
     /// `setBaseURL` was never called before making a request.
     case baseURLNotSet
+    /// The account changed while this request was in flight.
+    case sessionInvalidated
 }
 
 extension APIError: LocalizedError {
@@ -315,6 +323,8 @@ extension APIError: LocalizedError {
             return "The server response could not be read. Please try again."
         case .baseURLNotSet:
             return "No server URL is configured."
+        case .sessionInvalidated:
+            return "The account changed before the request completed."
         }
     }
 }
@@ -374,6 +384,7 @@ actor PrizmAPIClientImpl: PrizmAPIClientProtocol {
 
     private(set) var baseURL: URL?
     private var accessToken: String?
+    private var sessionGeneration: UInt64 = 0
 
     private let session:   URLSession
     private let logger:    Logger = Logger(
@@ -402,6 +413,7 @@ actor PrizmAPIClientImpl: PrizmAPIClientProtocol {
     // MARK: - Configuration
 
     func setBaseURL(_ url: URL) {
+        sessionGeneration &+= 1
         baseURL = url
     }
 
@@ -409,7 +421,19 @@ actor PrizmAPIClientImpl: PrizmAPIClientProtocol {
         accessToken = token
     }
 
+    func activateSession(baseURL: URL, accessToken: String?) {
+        sessionGeneration &+= 1
+        self.baseURL = baseURL
+        self.accessToken = accessToken
+    }
+
     func clearAccessToken() {
+        accessToken = nil
+    }
+
+    func invalidateSession() {
+        sessionGeneration &+= 1
+        baseURL = nil
         accessToken = nil
     }
 
@@ -502,7 +526,9 @@ actor PrizmAPIClientImpl: PrizmAPIClientProtocol {
     /// Cases 2 and 3 use the same fallthrough path because they produce the same
     /// user-facing error: re-enter your password / code.
     private func performIdentityToken(request: URLRequest) async throws -> TokenResponse {
+        let generation = sessionGeneration
         let (data, response) = try await session.data(for: request)
+        guard generation == sessionGeneration else { throw APIError.sessionInvalidated }
 
         guard let http = response as? HTTPURLResponse else {
             throw APIError.httpError(statusCode: 0, body: "")
@@ -771,7 +797,9 @@ actor PrizmAPIClientImpl: PrizmAPIClientProtocol {
         request.setValue("BlockBlob", forHTTPHeaderField: "x-ms-blob-type")
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         request.httpBody = encryptedBlob
+        let generation = sessionGeneration
         let (_, response) = try await session.data(for: request)
+        guard generation == sessionGeneration else { throw APIError.sessionInvalidated }
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             throw APIError.httpError(statusCode: code, body: "Azure upload failed")
@@ -804,7 +832,9 @@ actor PrizmAPIClientImpl: PrizmAPIClientProtocol {
     // MARK: - downloadBlob
 
     func downloadBlob(from url: URL) async throws -> Data {
+        let generation = sessionGeneration
         let (data, response) = try await session.data(from: url)
+        guard generation == sessionGeneration else { throw APIError.sessionInvalidated }
         guard let http = response as? HTTPURLResponse else {
             throw APIError.httpError(statusCode: 0, body: "Invalid response")
         }
@@ -1034,7 +1064,9 @@ actor PrizmAPIClientImpl: PrizmAPIClientProtocol {
     ///
     /// - Throws: `APIError.httpError` on non-2xx status codes; `APIError.decodingFailed` on JSON errors.
     private func perform<T: Decodable>(request: URLRequest) async throws -> T {
+        let generation = sessionGeneration
         let (data, response) = try await session.data(for: request)
+        guard generation == sessionGeneration else { throw APIError.sessionInvalidated }
 
         guard let http = response as? HTTPURLResponse else {
             throw APIError.httpError(statusCode: 0, body: "")
@@ -1088,7 +1120,9 @@ actor PrizmAPIClientImpl: PrizmAPIClientProtocol {
     /// Used for endpoints that return 200/204 with no meaningful response body
     /// (soft-delete, restore, purge). Throws `APIError.httpError` on non-2xx responses.
     private func performEmpty(request: URLRequest) async throws {
+        let generation = sessionGeneration
         let (data, response) = try await session.data(for: request)
+        guard generation == sessionGeneration else { throw APIError.sessionInvalidated }
 
         guard let http = response as? HTTPURLResponse else {
             throw APIError.httpError(statusCode: 0, body: "")

@@ -338,6 +338,36 @@ final class VaultBrowserViewModel: ObservableObject {
         syncErrorMessage = nil
     }
 
+    /// Clears all account-bound presentation state before another profile is selected.
+    func resetForAccountChange() {
+        itemRefreshGeneration += 1
+        searchSuggestionGeneration += 1
+        searchSuggestionTask?.cancel()
+        clipboardClearTask?.cancel()
+        NSPasteboard.general.clearContents()
+
+        isGlobalSearch = false
+        previousSelection = nil
+        navigationContext = .allVaults
+        sidebarSelection = .allItems
+        searchQuery = ""
+        searchSuggestions = []
+        itemSelection = nil
+        selectedItemIDs = []
+        displayedItems = []
+        itemCounts = [:]
+        folders = []
+        organizations = []
+        collections = []
+        lastSyncedAt = nil
+        syncStatusLabel = "Never synced"
+        syncErrorMessage = nil
+        actionError = nil
+        createItemType = nil
+        isEditingItem = false
+        isLoadingItems = false
+    }
+
     // MARK: - Refresh
 
     /// Refreshes `displayedItems` from the vault store based on current selection + search query.

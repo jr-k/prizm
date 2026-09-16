@@ -51,18 +51,47 @@ struct PrizmApp: App {
                 .keyboardShortcut("n", modifiers: [.command, .option])
             }
 
-            CommandGroup(after: .appInfo) {
-                Button("Sign Out…") {
+            CommandMenu("Account") {
+                ForEach(rootVM.accounts) { account in
+                    Button {
+                        secretVisibility.concealAll()
+                        rootVM.switchAccount(to: account.profileId)
+                    } label: {
+                        Label(
+                            rootVM.accountMenuTitle(account),
+                            systemImage: rootVM.isActive(account) ? "checkmark" : "person.crop.circle"
+                        )
+                    }
+                    .disabled(!rootVM.canSelectAccount(account))
+                    .accessibilityIdentifier(AccessibilityID.AccountMenu.profile(account.profileId))
+                }
+
+                if !rootVM.accounts.isEmpty {
+                    Divider()
+                }
+
+                Button("Add Account…") {
+                    secretVisibility.concealAll()
+                    rootVM.addAccount()
+                }
+                .disabled(rootVM.isChangingAccount)
+                .accessibilityIdentifier(AccessibilityID.AccountMenu.add)
+
+                Button("Remove This Account…") {
                     rootVM.confirmSignOut()
                 }
-                .keyboardShortcut("q", modifiers: [.command, .shift])
-                .disabled(!rootVM.isSignedIn)
+                .disabled(rootVM.isChangingAccount || rootVM.activeAccount == nil)
+                .accessibilityIdentifier(AccessibilityID.AccountMenu.remove)
+
+                Divider()
 
                 Button("Lock Vault") {
+                    secretVisibility.concealAll()
                     rootVM.lockVault()
                 }
                 .keyboardShortcut("l", modifiers: .command)
-                .disabled(!rootVM.isVaultUnlocked)
+                .disabled(rootVM.isChangingAccount || !rootVM.isVaultUnlocked)
+                .accessibilityIdentifier(AccessibilityID.AccountMenu.lock)
             }
 
             // "Item" menu - sits in the standard macOS menu bar next to Edit/View/Window.
@@ -255,14 +284,26 @@ protocol RootViewModelDependencies: AnyObject {
     func makeLoginViewModel() -> LoginViewModel
     func makeUnlockViewModel(account: Account) -> UnlockViewModel
     func makeVaultBrowserViewModel() -> VaultBrowserViewModel
-    /// Returns a fresh sync timestamp repository and use case scoped to the given email.
+    /// Returns a fresh sync timestamp repository and use case scoped to the local profile.
     /// Called after login/unlock to re-scope to the correct account before the first sync.
-    func makeSyncTimestampDependencies(for email: String) -> (repository: any SyncTimestampRepository, useCase: any GetLastSyncDateUseCase)
+    func makeSyncTimestampDependencies(for profileId: UUID) -> (repository: any SyncTimestampRepository, useCase: any GetLastSyncDateUseCase)
+    func clearAccountArtifacts() async
+    func configureAccountArtifacts(for account: Account) async
 }
 
 extension AppContainer: RootViewModelDependencies {
     var authRepo: any AuthRepository { authRepository }
     var vaultRepo: any VaultRepository { vaultStore }
+
+    func clearAccountArtifacts() async {
+        tempFileManager.cleanupAll()
+        await faviconLoader.clearCache()
+        await apiClient.invalidateSession()
+    }
+
+    func configureAccountArtifacts(for account: Account) async {
+        await faviconLoader.configure(iconsBase: account.serverEnvironment.iconsURL)
+    }
 }
 
 /// Top-level state machine that decides which screen to show.
@@ -283,6 +324,9 @@ final class RootViewModel: ObservableObject {
     }
 
     @Published var screen: Screen
+    @Published private(set) var accounts: [Account]
+    @Published private(set) var activeProfileId: UUID?
+    @Published private(set) var isChangingAccount = false
 
     // MARK: - "Item" menu state
 
@@ -315,6 +359,8 @@ final class RootViewModel: ObservableObject {
         self.container      = container
         self.loginVM        = container.makeLoginViewModel()
         self.vaultBrowserVM = container.makeVaultBrowserViewModel()
+        self.accounts       = container.authRepo.storedAccounts()
+        self.activeProfileId = container.authRepo.activeAccount()?.profileId
 
         // Check for stored session at launch.
         if let account = container.authRepo.storedAccount() {
@@ -345,8 +391,13 @@ final class RootViewModel: ObservableObject {
 
         // Unlock flow - re-subscribe whenever unlockVM is assigned.
         $unlockVM
-            .compactMap { $0 }
-            .flatMap { $0.$flowState }
+            .map { viewModel -> AnyPublisher<UnlockFlowState, Never> in
+                guard let viewModel else {
+                    return Empty<UnlockFlowState, Never>().eraseToAnyPublisher()
+                }
+                return viewModel.$flowState.eraseToAnyPublisher()
+            }
+            .switchToLatest()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in self?.handleUnlockFlow(state) }
             .store(in: &cancellables)
@@ -402,18 +453,22 @@ final class RootViewModel: ObservableObject {
     /// Called from both `handleLoginFlow` and `handleUnlockFlow` - the vault transition
     /// logic is identical in both flows. `caller` is included in the error log so the
     /// originating flow is identifiable when the account is unexpectedly missing.
-    private func transitionToVault(caller: String) {
+    private func transitionToVault(caller: String, recordSuccessfulSync: Bool = true) {
         // Re-scope before recording: on first login the AppContainer was initialised without
         // a known email; this corrects the UserDefaults key before handleSyncCompleted writes to it.
-        if let email = container.authRepo.storedAccount()?.email {
-            let deps = container.makeSyncTimestampDependencies(for: email)
+        if let profileId = container.authRepo.activeAccount()?.profileId {
+            let deps = container.makeSyncTimestampDependencies(for: profileId)
             vaultBrowserVM.updateSyncTimestamp(repository: deps.repository, useCase: deps.useCase)
+            if let account = container.authRepo.activeAccount() {
+                Task { await container.configureAccountArtifacts(for: account) }
+            }
         } else {
             // Unexpected: vault transition reached with no stored account - timestamp will
             // be written under the fallback empty-email key. Should not occur in normal flow.
             logger.error("\(caller, privacy: .public)(.vault): no stored account; sync timestamp not re-scoped")
         }
         screen = .vault
+        refreshAccounts()
         // Defer handleSyncCompleted to the next run-loop cycle so that the initial
         // VaultBrowserView layout pass (triggered by `screen = .vault` above) commits
         // before any @Published mutations from async vault reads arrive.
@@ -427,10 +482,12 @@ final class RootViewModel: ObservableObject {
         // DispatchQueue.main.async (not a Swift Task) is intentional: it guarantees
         // the block runs between run-loop iterations, after the current CATransaction
         // (which drives the SwiftUI layout commit) has flushed.
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            MainActor.assumeIsolated {
-                self.vaultBrowserVM.handleSyncCompleted(syncedAt: Date())
+        if recordSuccessfulSync {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                MainActor.assumeIsolated {
+                    self.vaultBrowserVM.handleSyncCompleted(syncedAt: Date())
+                }
             }
         }
     }
@@ -454,13 +511,32 @@ final class RootViewModel: ObservableObject {
         }
     }
 
+    var activeAccount: Account? {
+        accounts.first { $0.profileId == activeProfileId }
+    }
+
+    func isActive(_ account: Account) -> Bool {
+        activeAccount?.profileId == account.profileId
+    }
+
+    func canSelectAccount(_ account: Account) -> Bool {
+        guard !isChangingAccount else { return false }
+        if case .login = screen { return true }
+        return !isActive(account)
+    }
+
+    func accountMenuTitle(_ account: Account) -> String {
+        let host = account.serverEnvironment.base.host ?? account.serverEnvironment.base.absoluteString
+        return "\(account.email) - \(host)"
+    }
+
     /// Shows a confirmation alert before signing out (FR-014).
     func confirmSignOut() {
         let alert = NSAlert()
-        alert.messageText = "Sign Out"
-        alert.informativeText = "All local data will be cleared."
+        alert.messageText = "Remove This Account?"
+        alert.informativeText = "This account's local credentials and biometric enrollment will be removed."
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Sign Out")
+        alert.addButton(withTitle: "Remove Account")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         signOut()
@@ -469,17 +545,80 @@ final class RootViewModel: ObservableObject {
     /// Clears all session data and returns to the login screen.
     func signOut() {
         Task {
-            do {
-                try await container.authRepo.signOut()
-            } catch {
-                logger.error("Sign-out error: \(error.localizedDescription, privacy: .public)")
+            isChangingAccount = true
+            defer { isChangingAccount = false }
+            await clearAccountBoundary()
+            do { try await container.authRepo.signOut() }
+            catch { logger.error("Sign-out error: \(error.localizedDescription, privacy: .public)") }
+            refreshAccounts()
+            if let replacement = container.authRepo.activeAccount() {
+                unlockVM = container.makeUnlockViewModel(account: replacement)
+                screen = .unlock
+            } else {
+                unlockVM = nil
+                screen = .login
             }
-            await container.vaultRepo.clearVault()
-            await container.vaultKeyCache.clear()
-            unlockVM = nil
-            screen   = .login
+            AccessibilityNotification.Announcement("Account removed").post()
             logger.info("Sign out completed")
         }
+    }
+
+    func addAccount() {
+        Task {
+            isChangingAccount = true
+            defer { isChangingAccount = false }
+            await clearAccountBoundary()
+            loginVM.prepareForNewAccount()
+            unlockVM = nil
+            screen = .login
+        }
+    }
+
+    func switchAccount(to profileId: UUID) {
+        if let current = container.authRepo.activeAccount(), current.profileId == profileId {
+            unlockVM = container.makeUnlockViewModel(account: current)
+            screen = .unlock
+            return
+        }
+        Task {
+            isChangingAccount = true
+            defer { isChangingAccount = false }
+            await clearAccountBoundary()
+            do {
+                try await container.authRepo.activateAccount(profileId: profileId)
+                guard let account = container.authRepo.activeAccount() else {
+                    throw AuthError.invalidCredentials
+                }
+                await container.configureAccountArtifacts(for: account)
+                refreshAccounts()
+                unlockVM = container.makeUnlockViewModel(account: account)
+                screen = .unlock
+                AccessibilityNotification.Announcement(
+                    "Switched to \(account.email). Vault locked."
+                ).post()
+                logger.info("Account switch completed")
+            } catch {
+                logger.error("Account switch failed: \(error.localizedDescription, privacy: .public)")
+                AccessibilityNotification.Announcement("Account switch failed").post()
+                screen = container.authRepo.activeAccount() == nil ? .login : .unlock
+            }
+        }
+    }
+
+    private func clearAccountBoundary() async {
+        loginVM.cancelPendingFlow()
+        unlockVM?.cancelPendingFlow()
+        await container.authRepo.lockVault()
+        await container.vaultRepo.clearVault()
+        await container.vaultKeyCache.clear()
+        await container.orgKeyCache.clear()
+        await container.clearAccountArtifacts()
+        vaultBrowserVM.resetForAccountChange()
+    }
+
+    private func refreshAccounts() {
+        accounts = container.authRepo.storedAccounts()
+        activeProfileId = container.authRepo.activeAccount()?.profileId
     }
 
     // MARK: - Lock
@@ -489,12 +628,7 @@ final class RootViewModel: ObservableObject {
     func lockVault() {
         guard isVaultUnlocked else { return }
         Task {
-            await container.authRepo.lockVault()
-            await container.vaultRepo.clearVault()
-            // Clear all key caches in the same lock path as the vault store.
-            // Key material must not outlive the vault session (Constitution §III).
-            await container.vaultKeyCache.clear()
-            await container.orgKeyCache.clear()
+            await clearAccountBoundary()
             if let account = container.authRepo.storedAccount() {
                 unlockVM = container.makeUnlockViewModel(account: account)
                 screen = .unlock
@@ -518,9 +652,14 @@ final class RootViewModel: ObservableObject {
         case .unlock:       screen = .unlock
         case .loading:      screen = .unlock   // stay on unlock screen with spinner
         case .syncing(let msg): screen = .syncing(message: msg)
-        case .vault:        transitionToVault(caller: "handleUnlockFlow")
+        case .vault:
+            transitionToVault(
+                caller: "handleUnlockFlow",
+                recordSuccessfulSync: unlockVM?.lastSyncSucceeded ?? false
+            )
         case .login:
-            // "Sign in with a different account" - reset to login.
+            // "Sign in with a different account" keeps retained profiles.
+            loginVM.prepareForNewAccount()
             unlockVM = nil
             screen   = .login
         }
