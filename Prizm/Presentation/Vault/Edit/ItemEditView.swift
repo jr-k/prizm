@@ -182,7 +182,8 @@ struct ItemEditView: View {
                 isPersonalVault: viewModel.draft.organizationId == nil,
                 folderName: viewModel.folders.first {
                     $0.id == viewModel.draft.folderId
-                }?.name
+                }?.name,
+                itemType: itemType
             )
 
             Spacer()
@@ -196,6 +197,16 @@ struct ItemEditView: View {
         .padding(.horizontal, Spacing.pageMargin)
         .padding(.vertical, Spacing.bannerVertical)
         .background(Color.accentColor.opacity(Opacity.editingBanner(contrast)))
+    }
+
+    private var itemType: ItemType {
+        switch viewModel.draft.content {
+        case .login:      return .login
+        case .card:       return .card
+        case .identity:   return .identity
+        case .secureNote: return .secureNote
+        case .sshKey:     return .sshKey
+        }
     }
 
     private var discardButton: some View {

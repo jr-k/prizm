@@ -671,7 +671,8 @@ struct VaultBrowserView: View {
                 isPersonalVault: item.organizationId == nil,
                 folderName: viewModel.folders.first {
                     $0.id == item.folderId
-                }?.name
+                }?.name,
+                itemType: itemType(for: item)
             )
 
             Spacer()
@@ -743,6 +744,16 @@ struct VaultBrowserView: View {
         .background(.bar)
     }
 
+    private func itemType(for item: VaultItem) -> ItemType {
+        switch item.content {
+        case .login:      return .login
+        case .card:       return .card
+        case .identity:   return .identity
+        case .secureNote: return .secureNote
+        case .sshKey:     return .sshKey
+        }
+    }
+
     // MARK: - Sync Error Banner
 
     @ViewBuilder
@@ -778,6 +789,7 @@ struct ItemLocationBreadcrumb: View {
     let vaultName: String
     let isPersonalVault: Bool
     let folderName: String?
+    let itemType: ItemType
 
     var body: some View {
         HStack(spacing: Spacing.headerGap) {
@@ -795,6 +807,12 @@ struct ItemLocationBreadcrumb: View {
             if let folderName {
                 Label(folderName, systemImage: "folder")
             }
+
+            Text("|")
+                .foregroundStyle(.tertiary)
+                .accessibilityHidden(true)
+
+            Label(itemType.displayName, systemImage: itemType.sfSymbol)
         }
         .font(Typography.fieldValue)
         .foregroundStyle(.secondary)
