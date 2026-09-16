@@ -78,7 +78,7 @@ struct MaskedEditFieldRow: View {
     @State private var showGenerator = false
     @State private var generatorVM: PasswordGeneratorViewModel?
 
-    // TODO: make the timeout app-wide configurable (UserDefaults pref) — deferred to v2.
+    // TODO: make the timeout app-wide configurable (UserDefaults pref) - deferred to v2.
     // Using 30 s as a sensible default, matching the clipboard auto-clear interval.
     private let revealTimeout: Duration = .seconds(30)
 
@@ -164,7 +164,7 @@ struct MaskedEditFieldRow: View {
                 try await Task.sleep(for: revealTimeout)
                 maskNow()
             } catch {
-                // Task cancelled (e.g., user manually re-hid) — do nothing.
+                // Task cancelled (e.g., user manually re-hid) - do nothing.
             }
         }
     }

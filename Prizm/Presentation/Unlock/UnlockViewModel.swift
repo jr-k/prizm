@@ -98,7 +98,11 @@ final class UnlockViewModel: ObservableObject {
                 await checkEnrollmentOrSync()
             } catch let err as AuthError {
                 logger.error("Unlock failed: \(err.localizedDescription, privacy: .public)")
-                errorMessage = err.errorDescription
+                if err == .invalidCredentials {
+                    errorMessage = "Incorrect master password. Please try again."
+                } else {
+                    errorMessage = err.errorDescription
+                }
                 flowState    = .unlock
             } catch {
                 logger.error("Unlock failed: \(error.localizedDescription, privacy: .public)")
@@ -109,7 +113,7 @@ final class UnlockViewModel: ObservableObject {
     }
 
     /// Attempts biometric unlock. On success, proceeds to sync.
-    /// On cancellation, re-arms the sensor immediately (always-armed behaviour —
+    /// On cancellation, re-arms the sensor immediately (always-armed behaviour -
     /// design Decision 2). On lockout or invalidation, shows an error and stops.
     func unlockWithBiometrics() {
         Task {
@@ -121,20 +125,20 @@ final class UnlockViewModel: ObservableObject {
                 lastBiometricInvalidated = true
                 errorMessage = err.errorDescription
                 flowState = .unlock
-                // Intentionally NOT re-arming — invalidation requires password entry.
+                // Intentionally NOT re-arming - invalidation requires password entry.
             } catch let err as AuthError where err == .biometricItemNotFound {
-                // Keychain item deleted externally — degrade silently, no error shown.
+                // Keychain item deleted externally - degrade silently, no error shown.
                 // biometricUnlockAvailable will return false now (flag cleared in repo).
                 _ = err
                 flowState = .unlock
             } catch let err as NSError
                 where err.domain == NSOSStatusErrorDomain && err.code == Int(errSecUserCanceled) {
-                // User cancelled — re-arm immediately so the sensor is always ready.
+                // User cancelled - re-arm immediately so the sensor is always ready.
                 // No error shown; password field stays available in parallel.
                 flowState = .unlock
                 triggerBiometricUnlockIfAvailable()
             } catch {
-                // Lockout or other failure — show the error, stop re-arming.
+                // Lockout or other failure - show the error, stop re-arming.
                 errorMessage = error.localizedDescription
                 flowState = .unlock
             }
@@ -144,7 +148,7 @@ final class UnlockViewModel: ObservableObject {
     /// Triggers biometric unlock via the embedded `LAAuthenticationView` path.
     /// Called from `.task(id: biometricContextVersion)` in `UnlockView` so the
     /// `LAAuthenticationView` is guaranteed to be in the window before
-    /// `evaluatePolicy` is called — no system modal appears.
+    /// `evaluatePolicy` is called - no system modal appears.
     func triggerEmbeddedBiometricIfAvailable() {
         guard biometricUnlockAvailable, let provider = embeddedBiometric else { return }
         Task {
@@ -157,17 +161,17 @@ final class UnlockViewModel: ObservableObject {
                 errorMessage = err.errorDescription
                 flowState    = .unlock
             } catch let err as AuthError where err == .biometricItemNotFound {
-                // Keychain item deleted externally — degrade silently, no error shown.
+                // Keychain item deleted externally - degrade silently, no error shown.
                 _ = err
                 flowState = .unlock
             } catch let laError as LAError {
                 switch laError.code {
                 case .biometryLockout:
-                    // Locked out — show error, stop re-arming.
+                    // Locked out - show error, stop re-arming.
                     errorMessage = laError.localizedDescription
                     flowState    = .unlock
                 default:
-                    // Cancellation or transient failure — re-arm silently.
+                    // Cancellation or transient failure - re-arm silently.
                     rearmBiometrics()
                 }
             } catch {

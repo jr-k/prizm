@@ -83,7 +83,7 @@ final class UnlockViewModelBiometricTests: XCTestCase {
 
     func testUnlockWithBiometrics_cancellation_rearmsImmediately() async {
         // Cancellation should re-call triggerBiometricUnlockIfAvailable(), which
-        // calls unlockWithBiometrics() again — always-armed behaviour (design Decision 2).
+        // calls unlockWithBiometrics() again - always-armed behaviour (design Decision 2).
         mockAuth.stubbedBiometricUnlockAvailable = true
 
         let cancelError = NSError(

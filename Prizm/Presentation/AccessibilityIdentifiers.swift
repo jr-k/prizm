@@ -77,6 +77,11 @@ nonisolated enum AccessibilityID {
         static func row(_ id: String) -> String { "itemList.row.\(id)" }
     }
 
+    enum Transfer {
+        static let confirm = "transfer.confirm"
+        static let error = "transfer.error"
+    }
+
     // MARK: - Item Detail (US3)
 
     enum Detail {

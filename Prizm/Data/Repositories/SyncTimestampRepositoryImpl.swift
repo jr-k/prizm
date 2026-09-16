@@ -5,13 +5,13 @@ import os.log
 
 /// Persists the last successful vault sync timestamp to `UserDefaults`.
 ///
-/// - Storage: `UserDefaults`, keyed per account email. Not a secret — no Keychain needed.
+/// - Storage: `UserDefaults`, keyed per account email. Not a secret - no Keychain needed.
 /// - Thread safety: implemented as an `actor` (CLAUDE.md: actor for shared mutable state in
 ///   the Data layer) to guard against concurrent reads/writes from the sync completion path
 ///   and the ViewModel load path.
-/// - Key format: `com.prizm.lastSyncDate.<email>` — scoped per account so that
+/// - Key format: `com.prizm.lastSyncDate.<email>` - scoped per account so that
 ///   switching accounts never shows a timestamp from a previous session.
-/// - Format: ISO-8601 string via `ISO8601DateFormatter` — human-readable in developer tools.
+/// - Format: ISO-8601 string via `ISO8601DateFormatter` - human-readable in developer tools.
 actor SyncTimestampRepositoryImpl: SyncTimestampRepository {
 
     /// `key` is a plain `let`: `String` is `Sendable`, so Swift 6 allows nonisolated access
@@ -66,14 +66,14 @@ actor SyncTimestampRepositoryImpl: SyncTimestampRepository {
     /// `defaults` and `key` are `nonisolated(unsafe)` immutable lets, safe to access here.
     /// `UserDefaults.set` is thread-safe per Apple's documentation.
     ///
-    /// Call only on the sync success path. Error paths MUST NOT call this — the stored
+    /// Call only on the sync success path. Error paths MUST NOT call this - the stored
     /// value must always reflect the last *successful* sync.
     nonisolated func recordSuccessfulSync() {
         let iso = Self.formatter.string(from: Date())
         defaults.set(iso, forKey: key)
         // §V Observability: log that a sync timestamp was recorded. Timestamp is non-sensitive.
         // Local Logger allocation required because the actor-isolated `logger` property is not
-        // accessible from a nonisolated context. os.Logger is a lightweight struct — no cost.
+        // accessible from a nonisolated context. os.Logger is a lightweight struct - no cost.
         Logger(subsystem: "com.prizm", category: "SyncTimestampRepository")
             .info("Sync timestamp recorded: \(iso, privacy: .public)")
     }

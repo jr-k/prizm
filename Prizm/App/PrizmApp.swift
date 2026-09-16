@@ -16,6 +16,7 @@ struct PrizmApp: App {
     @StateObject private var container: AppContainer
     @StateObject private var rootVM:    RootViewModel
     @State       private var optionKeyMonitor = OptionKeyMonitor()
+    @State       private var secretVisibility = SecretVisibilityState()
 
     // Used by the About menu item to open the custom About window scene.
     @Environment(\.openWindow) private var openWindow
@@ -32,9 +33,9 @@ struct PrizmApp: App {
             rootView
                 .frame(minWidth: 480, minHeight: 360)
                 .environment(optionKeyMonitor)
+                .environment(secretVisibility)
         }
-        .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified(showsTitle: false))
+        .windowStyle(.hiddenTitleBar)
         .commands {
             // Replace the default "About Prizm" panel with our custom SwiftUI window.
             CommandGroup(replacing: .appInfo) {
@@ -64,7 +65,7 @@ struct PrizmApp: App {
                 .disabled(!rootVM.isVaultUnlocked)
             }
 
-            // "Item" menu — sits in the standard macOS menu bar next to Edit/View/Window.
+            // "Item" menu - sits in the standard macOS menu bar next to Edit/View/Window.
             // Edit opens the edit sheet for the selected vault item (⌘E).
             // Save persists in-flight edits (⌘S).
             // Buttons are disabled by `rootVM` Combine subscriptions that track
@@ -81,6 +82,14 @@ struct PrizmApp: App {
                 }
                 .disabled(!rootVM.menuBarCanSave)
                 .keyboardShortcut("s", modifiers: .command)
+
+                Divider()
+
+                Button(secretVisibility.revealsAll ? "Hide All Secrets" : "Reveal All Secrets") {
+                    secretVisibility.toggleAll()
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(!rootVM.isVaultUnlocked || rootVM.vaultBrowserVM.itemSelection == nil)
 
                 Divider()
 
@@ -110,7 +119,7 @@ struct PrizmApp: App {
             }
         }
 
-        // Custom About window — opened via Prizm → About Prizm.
+        // Custom About window - opened via Prizm → About Prizm.
         // hiddenTitleBar: AboutView provides its own header with the app icon and name,
         // so the system title bar would be redundant.
         // contentSize resizability: window sizes to AboutView's fixed 380pt width; no
@@ -121,12 +130,13 @@ struct PrizmApp: App {
         .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
 
-        // Settings window — opened via ⌘, (macOS convention) or the gear toolbar button.
+        // Settings window - opened via ⌘, (macOS convention) or the gear toolbar button.
         // The Settings scene does not inherit the WindowGroup environment, so we pass
         // the container explicitly via .environmentObject().
         Settings {
             SettingsView(authRepository: container.authRepository)
         }
+        .windowToolbarStyle(.unifiedCompact(showsTitle: false))
     }
 
     @ViewBuilder
@@ -165,6 +175,9 @@ struct PrizmApp: App {
                     vm.onSaveSuccess = { [weak vaultBrowserVM] updatedItem in
                         vaultBrowserVM?.handleItemSaved(updatedItem)
                     }
+                    vm.onAttachmentsChanged = { [weak vaultBrowserVM] in
+                        vaultBrowserVM?.refreshItemSelection()
+                    }
                     return vm
                 },
                 makeCreateViewModel: { [vaultBrowserVM = rootVM.vaultBrowserVM] type, contextId in
@@ -189,6 +202,30 @@ struct PrizmApp: App {
                     }
                     return vm
                 },
+                makeMoveViewModel: { [container, vaultBrowserVM = rootVM.vaultBrowserVM] items in
+                    container.makeItemTransferViewModel(
+                        operation: .move,
+                        items: items,
+                        folders: vaultBrowserVM.folders,
+                        organizations: vaultBrowserVM.organizations,
+                        collections: vaultBrowserVM.collections,
+                        onFinished: { [weak vaultBrowserVM] items in
+                            vaultBrowserVM?.handleTransferFinished(items)
+                        }
+                    )
+                },
+                makeDuplicateViewModel: { [container, vaultBrowserVM = rootVM.vaultBrowserVM] items in
+                    container.makeItemTransferViewModel(
+                        operation: .duplicate,
+                        items: items,
+                        folders: vaultBrowserVM.folders,
+                        organizations: vaultBrowserVM.organizations,
+                        collections: vaultBrowserVM.collections,
+                        onFinished: { [weak vaultBrowserVM] items in
+                            vaultBrowserVM?.handleTransferFinished(items)
+                        }
+                    )
+                },
                 makeAddAttachmentViewModel: { cipherId in
                     container.makeAddAttachmentViewModel(for: cipherId)
                 },
@@ -205,7 +242,7 @@ struct PrizmApp: App {
 
 // MARK: - RootViewModel
 
-/// Dependencies required by `RootViewModel` — extracted for testability.
+/// Dependencies required by `RootViewModel` - extracted for testability.
 @MainActor
 protocol RootViewModelDependencies: AnyObject {
     var authRepo: any AuthRepository { get }
@@ -264,7 +301,7 @@ final class RootViewModel: ObservableObject {
     let vaultBrowserVM:   VaultBrowserViewModel
 
     private let container: any RootViewModelDependencies
-    /// Combine subscriptions — held for the lifetime of this object.
+    /// Combine subscriptions - held for the lifetime of this object.
     /// Using Combine (not SwiftUI .onChange) so transitions fire regardless
     /// of whether the source view is currently in the view hierarchy.
     private var cancellables = Set<AnyCancellable>()
@@ -299,13 +336,13 @@ final class RootViewModel: ObservableObject {
     // MARK: - Combine subscriptions
 
     private func subscribeToFlowStates() {
-        // Login flow — observe for the lifetime of the app (loginVM is never replaced).
+        // Login flow - observe for the lifetime of the app (loginVM is never replaced).
         loginVM.$flowState
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in self?.handleLoginFlow(state) }
             .store(in: &cancellables)
 
-        // Unlock flow — re-subscribe whenever unlockVM is assigned.
+        // Unlock flow - re-subscribe whenever unlockVM is assigned.
         $unlockVM
             .compactMap { $0 }
             .flatMap { $0.$flowState }
@@ -313,21 +350,21 @@ final class RootViewModel: ObservableObject {
             .sink { [weak self] state in self?.handleUnlockFlow(state) }
             .store(in: &cancellables)
 
-        // canEdit: item selected AND edit sheet not yet open.
-        // canSave: edit sheet is open.
-        // Both are derived by watching editSheetOpen and itemSelection independently.
+        // canEdit: item selected AND not already being edited.
+        // canSave: in-place editing is active.
+        // Both are derived by watching isEditingItem and itemSelection independently.
         // `for await` on @Published.values avoids Combine callbacks (CLAUDE.md async/await rule).
         Task { [weak self, vaultBrowserVM] in
-            for await open in vaultBrowserVM.$editSheetOpen.values {
+            for await isEditing in vaultBrowserVM.$isEditingItem.values {
                 guard let self else { break }
-                self.menuBarCanSave = open
-                self.menuBarCanEdit = vaultBrowserVM.itemSelection != nil && !open
+                self.menuBarCanSave = isEditing
+                self.menuBarCanEdit = vaultBrowserVM.itemSelection != nil && !isEditing
             }
         }
         Task { [weak self, vaultBrowserVM] in
             for await selection in vaultBrowserVM.$itemSelection.values {
                 guard let self else { break }
-                self.menuBarCanEdit = selection != nil && !vaultBrowserVM.editSheetOpen
+                self.menuBarCanEdit = selection != nil && !vaultBrowserVM.isEditingItem
                 if case .login(let login) = selection?.content {
                     self.selectedLogin = login
                 } else {
@@ -361,7 +398,7 @@ final class RootViewModel: ObservableObject {
     /// Re-scopes the sync timestamp to the current account and records a successful sync,
     /// then transitions to the vault screen.
     ///
-    /// Called from both `handleLoginFlow` and `handleUnlockFlow` — the vault transition
+    /// Called from both `handleLoginFlow` and `handleUnlockFlow` - the vault transition
     /// logic is identical in both flows. `caller` is included in the error log so the
     /// originating flow is identifiable when the account is unexpectedly missing.
     private func transitionToVault(caller: String) {
@@ -371,7 +408,7 @@ final class RootViewModel: ObservableObject {
             let deps = container.makeSyncTimestampDependencies(for: email)
             vaultBrowserVM.updateSyncTimestamp(repository: deps.repository, useCase: deps.useCase)
         } else {
-            // Unexpected: vault transition reached with no stored account — timestamp will
+            // Unexpected: vault transition reached with no stored account - timestamp will
             // be written under the fallback empty-email key. Should not occur in normal flow.
             logger.error("\(caller, privacy: .public)(.vault): no stored account; sync timestamp not re-scoped")
         }
@@ -482,7 +519,7 @@ final class RootViewModel: ObservableObject {
         case .syncing(let msg): screen = .syncing(message: msg)
         case .vault:        transitionToVault(caller: "handleUnlockFlow")
         case .login:
-            // "Sign in with a different account" — reset to login.
+            // "Sign in with a different account" - reset to login.
             unlockVM = nil
             screen   = .login
         }

@@ -1,7 +1,7 @@
 import Foundation
 @testable import Prizm
 
-/// Test double for `AuthRepository` — used by `LoginUseCaseTests`.
+/// Test double for `AuthRepository` - used by `LoginUseCaseTests`.
 final class MockAuthRepository: AuthRepository {
 
     // MARK: - State observations

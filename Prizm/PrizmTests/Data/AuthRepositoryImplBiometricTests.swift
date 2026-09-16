@@ -100,7 +100,7 @@ final class AuthRepositoryImplBiometricTests: XCTestCase {
     }
 
     func testUnlockWithBiometrics_itemNotFound_throwsBiometricItemNotFound() async {
-        // No biometric key in keychain — externally deleted or never written.
+        // No biometric key in keychain - externally deleted or never written.
         // Must throw .biometricItemNotFound (silent degradation), not .biometricInvalidated.
         do {
             _ = try await sut.unlockWithBiometrics()

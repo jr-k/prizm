@@ -84,7 +84,7 @@ struct DetailSectionCard<Content: View>: View {
 
     /// Returns `true` when the card should render a visible section header.
     ///
-    /// A nil or whitespace-only title means no header is rendered — the card
+    /// A nil or whitespace-only title means no header is rendered - the card
     /// appears without a label above it.
     static func hasHeader(_ title: String?) -> Bool {
         guard let title else { return false }

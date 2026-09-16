@@ -59,7 +59,7 @@ final class RootViewModelLockTests: XCTestCase {
     func testLockVault_noOpWhenLogin() async throws {
         sut.screen = .login
         sut.lockVault()
-        // Fixed sleep (not polling) because this is a no-op test — there is no positive
+        // Fixed sleep (not polling) because this is a no-op test - there is no positive
         // state change to poll for. 50ms is enough for the guard-return fast path.
         try await Task.sleep(for: .milliseconds(50))
 
@@ -71,7 +71,7 @@ final class RootViewModelLockTests: XCTestCase {
     func testLockVault_noOpWhenUnlock() async throws {
         sut.screen = .unlock
         sut.lockVault()
-        // Fixed sleep (not polling) because this is a no-op test — there is no positive
+        // Fixed sleep (not polling) because this is a no-op test - there is no positive
         // state change to poll for. 50ms is enough for the guard-return fast path.
         try await Task.sleep(for: .milliseconds(50))
 

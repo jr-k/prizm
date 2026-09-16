@@ -5,7 +5,7 @@ import Foundation
 actor MockPrizmCryptoService: PrizmCryptoService {
 
     // MARK: - State
-    // nonisolated(unsafe) allows tests to read/write without await — safe in single-threaded tests.
+    // nonisolated(unsafe) allows tests to read/write without await - safe in single-threaded tests.
 
     nonisolated(unsafe) var _isUnlocked: Bool = false
     nonisolated var isUnlocked: Bool { _isUnlocked }

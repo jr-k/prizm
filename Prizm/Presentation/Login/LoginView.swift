@@ -5,7 +5,7 @@ import SwiftUI
 /// The initial authentication screen (User Story 1, FR-001–FR-010).
 ///
 /// Collects server URL, email, and master password, then initiates the login flow
-/// via `LoginViewModel`. The view itself is stateless — all logic lives in the VM.
+/// via `LoginViewModel`. The view itself is stateless - all logic lives in the VM.
 struct LoginView: View {
 
     @ObservedObject var viewModel: LoginViewModel
@@ -35,7 +35,7 @@ struct LoginView: View {
 
             // MARK: Form fields
             VStack(spacing: 12) {
-                // Server URL — FR-001
+                // Server URL - FR-001
                 LabeledContent("Server URL") {
                     TextField("https://vault.example.com", text: $viewModel.serverURL)
                         .textFieldStyle(.roundedBorder)
@@ -45,7 +45,7 @@ struct LoginView: View {
                         .accessibilityIdentifier(AccessibilityID.Login.serverURLField)
                 }
 
-                // Email — FR-003
+                // Email - FR-003
                 LabeledContent("Email") {
                     TextField("you@example.com", text: $viewModel.email)
                         .textFieldStyle(.roundedBorder)
@@ -55,7 +55,7 @@ struct LoginView: View {
                         .accessibilityIdentifier(AccessibilityID.Login.emailField)
                 }
 
-                // Master password — FR-005
+                // Master password - FR-005
                 LabeledContent("Master password") {
                     SecureField("Enter master password", text: $viewModel.password)
                         .textFieldStyle(.roundedBorder)
@@ -78,7 +78,7 @@ struct LoginView: View {
                     .accessibilityIdentifier(AccessibilityID.Login.errorMessage)
             }
 
-            // MARK: Sign In button — FR-007
+            // MARK: Sign In button - FR-007
             Button(action: signIn) {
                 if case .loading = viewModel.flowState {
                     ProgressView()

@@ -12,57 +12,53 @@ struct LoginEditForm: View {
     @Binding var draft: DraftLoginContent
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 0) {
 
-                DetailSectionCard("Credentials") {
-                    OptionalEditFieldRow(label: "Username", value: $draft.username)
-                    Divider()
-                    MaskedEditFieldRow(label: "Password", value: $draft.password, generatorBinding: $draft.password)
-                }
+            DetailSectionCard("Credentials") {
+                OptionalEditFieldRow(label: "Username", value: $draft.username)
+                Divider()
+                MaskedEditFieldRow(label: "Password", value: $draft.password, generatorBinding: $draft.password)
+            }
 
-                DetailSectionCard("Websites") {
-                    ForEach(draft.uris) { uri in
-                        if let index = draft.uris.firstIndex(where: { $0.id == uri.id }) {
-                            if index > 0 { Divider() }
-                            URIEditRow(
-                                uri: $draft.uris[index],
-                                canMoveUp: index > 0,
-                                canMoveDown: index < draft.uris.count - 1,
-                                showReorderButtons: draft.uris.count > 1,
-                                onMoveUp: {
-                                    guard let i = draft.uris.firstIndex(where: { $0.id == uri.id }), i > 0 else { return }
-                                    draft.uris.swapAt(i, i - 1)
-                                },
-                                onMoveDown: {
-                                    guard let i = draft.uris.firstIndex(where: { $0.id == uri.id }), i < draft.uris.count - 1 else { return }
-                                    draft.uris.swapAt(i, i + 1)
-                                },
-                                onRemove: {
-                                    guard let i = draft.uris.firstIndex(where: { $0.id == uri.id }) else { return }
-                                    draft.uris.remove(at: i)
-                                }
-                            )
-                        }
+            DetailSectionCard("Websites") {
+                ForEach(draft.uris) { uri in
+                    if let index = draft.uris.firstIndex(where: { $0.id == uri.id }) {
+                        if index > 0 { Divider() }
+                        URIEditRow(
+                            uri: $draft.uris[index],
+                            canMoveUp: index > 0,
+                            canMoveDown: index < draft.uris.count - 1,
+                            showReorderButtons: draft.uris.count > 1,
+                            onMoveUp: {
+                                guard let i = draft.uris.firstIndex(where: { $0.id == uri.id }), i > 0 else { return }
+                                draft.uris.swapAt(i, i - 1)
+                            },
+                            onMoveDown: {
+                                guard let i = draft.uris.firstIndex(where: { $0.id == uri.id }), i < draft.uris.count - 1 else { return }
+                                draft.uris.swapAt(i, i + 1)
+                            },
+                            onRemove: {
+                                guard let i = draft.uris.firstIndex(where: { $0.id == uri.id }) else { return }
+                                draft.uris.remove(at: i)
+                            }
+                        )
                     }
-                    if !draft.uris.isEmpty { Divider() }
-                    Button {
-                        draft.uris.append(DraftLoginURI())
-                    } label: {
-                        Label("Add Website", systemImage: "plus")
-                            .font(Typography.fieldValue)
-                            .foregroundStyle(.tint)
-                    }
-                    .buttonStyle(.borderless)
-                    .padding(.vertical, Spacing.rowVertical)
-                    .padding(.horizontal, Spacing.rowHorizontal)
                 }
-
-                DetailSectionCard("Notes") {
-                    OptionalEditFieldRow(label: "Notes", value: $draft.notes)
+                if !draft.uris.isEmpty { Divider() }
+                Button {
+                    draft.uris.append(DraftLoginURI())
+                } label: {
+                    Label("Add Website", systemImage: "plus")
+                        .font(Typography.fieldValue)
+                        .foregroundStyle(.tint)
                 }
+                .buttonStyle(.borderless)
+                .padding(.vertical, Spacing.rowVertical)
+                .padding(.horizontal, Spacing.rowHorizontal)
+            }
 
-                CustomFieldsEditSection(fields: $draft.customFields)
+            DetailSectionCard("Notes") {
+                OptionalEditFieldRow(label: "Notes", value: $draft.notes)
             }
         }
     }

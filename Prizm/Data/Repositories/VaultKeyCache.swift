@@ -17,7 +17,7 @@ import os.log
 /// - Thread safety: declared as `actor` because it is written from the sync path
 ///   (background `actor SyncRepositoryImpl`) and read from attachment operation paths
 ///   (`VaultKeyServiceImpl`). An `actor` prevents data races under Swift 6 strict
-///   concurrency checking (Constitution §II — "actor for shared mutable state in
+///   concurrency checking (Constitution §II - "actor for shared mutable state in
 ///   Data layer").
 actor VaultKeyCache {
 
@@ -48,9 +48,21 @@ actor VaultKeyCache {
         cache[cipherId]
     }
 
+    /// Stores the effective key for an item created after the last full sync.
+    ///
+    /// This is required for immediate attachment uploads, especially for organization
+    /// items whose effective key differs from the user's personal vault key.
+    func store(key: Data, for cipherId: String) {
+        let existingCount = cache[cipherId]?.count ?? 0
+        if existingCount > 0 {
+            cache[cipherId]?.resetBytes(in: 0..<existingCount)
+        }
+        cache[cipherId] = key
+    }
+
     /// Zeros all key material and clears the cache.
     ///
-    /// Called on vault lock and sign-out — mirrors the lifecycle of `VaultRepositoryImpl`.
+    /// Called on vault lock and sign-out - mirrors the lifecycle of `VaultRepositoryImpl`.
     /// Zeroing before clearing reduces the window during which key bytes remain on the
     /// heap after the cache is discarded (Constitution §III).
     func clear() {
@@ -64,6 +76,6 @@ actor VaultKeyCache {
             }
         }
         cache.removeAll()
-        logger.info("VaultKeyCache cleared — key material zeroed")
+        logger.info("VaultKeyCache cleared - key material zeroed")
     }
 }

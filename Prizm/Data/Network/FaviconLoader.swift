@@ -11,7 +11,7 @@ import os.log
 ///
 /// Caching: `URLCache` provides HTTP-level caching (`returnCacheDataElseLoad`).
 /// In-memory `NSCache<NSString, NSImage>` provides session-level deduplication.
-/// Failures are silent — callers fall back to the appropriate SF Symbol (FR-009).
+/// Failures are silent - callers fall back to the appropriate SF Symbol (FR-009).
 ///
 /// Thread safety: `actor` isolation guarantees the in-memory cache is mutation-safe.
 actor FaviconLoader {

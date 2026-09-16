@@ -49,7 +49,7 @@ final class LoginViewModel: ObservableObject {
         errorMessage = nil
         flowState    = .loading
 
-        // Convert the password String to Data at this boundary — the only place the
+        // Convert the password String to Data at this boundary - the only place the
         // String-to-bytes conversion happens. `Data` can be zeroed after the KDF call;
         // `String` cannot (Constitution §III).
         // Reject empty password here to match the UI's disabled-button guard.

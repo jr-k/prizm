@@ -35,11 +35,11 @@ final class AttachmentTempFileManagerTests: XCTestCase {
     func test_register_fileStillExistsBeforeCleanup() {
         let url = makeTempFile()
         sut.register(url: url)
-        // cleanup() not called yet — file should exist
+        // cleanup() not called yet - file should exist
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
     }
 
-    // MARK: - cleanup — expired deadline
+    // MARK: - cleanup - expired deadline
 
     func test_cleanup_deletesFilesPastDeadline() {
         let url = makeTempFile()
@@ -63,7 +63,7 @@ final class AttachmentTempFileManagerTests: XCTestCase {
             "File should not exist after cleanup")
     }
 
-    // MARK: - cleanup — unexpired deadline
+    // MARK: - cleanup - unexpired deadline
 
     func test_cleanup_leavesFilesNotYetExpired() {
         let url = makeTempFile()
@@ -98,7 +98,7 @@ final class AttachmentTempFileManagerTests: XCTestCase {
         sut.register(url: url, deleteAfter: Date().addingTimeInterval(-1))
 
         sut.cleanup()
-        sut.cleanup()  // second call — file already gone, should not throw/crash
+        sut.cleanup()  // second call - file already gone, should not throw/crash
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }

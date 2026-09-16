@@ -7,7 +7,7 @@ import Foundation
 actor MockPrizmAPIClient: PrizmAPIClientProtocol {
 
     // MARK: - Configuration state
-    // nonisolated(unsafe) allows tests to read/write without await — safe in single-threaded tests.
+    // nonisolated(unsafe) allows tests to read/write without await - safe in single-threaded tests.
 
     nonisolated(unsafe) var baseURL: URL?
     nonisolated(unsafe) var storedAccessToken: String?

@@ -48,7 +48,7 @@ final class AccessibilityLabelTests: XCTestCase {
         }
         firstRow.click()
 
-        // The favorite star is a toolbar button without a fixed identifier —
+        // The favorite star is a toolbar button without a fixed identifier -
         // look for a button whose label contains "Favorite" or "Unfavorite".
         let star = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] 'favorite'")).firstMatch
         XCTAssertTrue(star.waitForExistence(timeout: 5), "Favorite star must exist")

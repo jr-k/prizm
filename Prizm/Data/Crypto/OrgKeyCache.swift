@@ -11,12 +11,12 @@ import os.log
 ///
 /// - Populated at sync time by `SyncRepositoryImpl` after unwrapping each org's RSA-encrypted
 ///   symmetric key. Cleared alongside `VaultKeyCache` on vault lock and sign-out.
-///   Reference: Bitwarden Security Whitepaper §4 — "Organization Key Wrapping".
+///   Reference: Bitwarden Security Whitepaper §4 - "Organization Key Wrapping".
 ///
 /// - Thread safety: declared as `actor` because it is written from the sync path
 ///   (background `actor SyncRepositoryImpl`) and read from `CipherMapper` via a
 ///   synchronous snapshot. An `actor` prevents data races under Swift 6 strict
-///   concurrency checking (Constitution §II — "actor for shared mutable state in
+///   concurrency checking (Constitution §II - "actor for shared mutable state in
 ///   Data layer").
 actor OrgKeyCache {
 
@@ -65,6 +65,6 @@ actor OrgKeyCache {
             cache[key]?.macKey.resetBytes(in: 0..<macCount)
         }
         cache.removeAll()
-        logger.info("OrgKeyCache cleared — key material zeroed")
+        logger.info("OrgKeyCache cleared - key material zeroed")
     }
 }

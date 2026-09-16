@@ -5,7 +5,7 @@ import Foundation
 /// Protocol for managing the lifecycle of temporary files written during attachment open.
 ///
 /// Placed in the Presentation layer (not Domain) because it is an infrastructure concern
-/// driven by UI lifecycle events — not a business rule. `AttachmentRowViewModel` depends
+/// driven by UI lifecycle events - not a business rule. `AttachmentRowViewModel` depends
 /// on `any TempFileManaging` so it never imports the App-layer concrete type directly,
 /// keeping the Presentation layer clean (Constitution §II).
 ///
