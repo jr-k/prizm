@@ -54,6 +54,7 @@ struct SidebarView: View {
     // Tree collapse state (per-session)
     @State private var expandedFolderIds: Set<String> = []
     @State private var expandedOrgIds: Set<String> = []
+    @State private var isContextPickerPresented = false
 
     private var folderTree: [FolderTreeNode] {
         FolderTreeNode.buildTree(from: folders)
@@ -107,31 +108,8 @@ struct SidebarView: View {
 
     private var contextPicker: some View {
         VStack(spacing: 0) {
-            Menu {
-                contextMenuButton(
-                    title: "All Vaults",
-                    systemImage: "square.stack.3d.up",
-                    context: .allVaults
-                )
-
-                Divider()
-
-                contextMenuButton(
-                    title: "My Vault",
-                    systemImage: "person.crop.circle",
-                    context: .personal
-                )
-
-                if !organizations.isEmpty {
-                    Divider()
-                    ForEach(organizations) { organization in
-                        contextMenuButton(
-                            title: organization.name,
-                            systemImage: "building.2",
-                            context: .organization(organization.id)
-                        )
-                    }
-                }
+            Button {
+                isContextPickerPresented.toggle()
             } label: {
                 HStack(spacing: Spacing.headerGap) {
                     Image(systemName: navigationContextIcon)
@@ -163,41 +141,43 @@ struct SidebarView: View {
                 .contentShape(Rectangle())
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            // `.borderlessButton` hosts the label in an NSPopUpButton that sizes to the
-            // label's intrinsic width and ignores `maxWidth: .infinity`, so the chevron
-            // hugged the text and clicks on the trailing blank space did nothing.
-            // `.button` + `.plain` renders the label as a regular SwiftUI button whose
-            // full-width `contentShape` is the hit area.
-            .menuStyle(.button)
             .buttonStyle(.plain)
-            .menuIndicator(.hidden)
+            .accessibilityLabel("Vault Context")
+            .accessibilityValue(navigationContextName)
+            .popover(isPresented: $isContextPickerPresented, arrowEdge: .bottom) {
+                SearchableSelectPopover(
+                    title: "vaults",
+                    selection: $navigationContext,
+                    options: contextOptions
+                ) {
+                    isContextPickerPresented = false
+                }
+            }
         }
         .padding(.horizontal, Spacing.contextPickerOuterHorizontal)
         .padding(.top, Spacing.sidebarContextTop)
         .padding(.bottom, Spacing.sidebarContextBottom)
-        .accessibilityLabel("Vault Context")
-        .accessibilityValue(navigationContextName)
     }
 
-    @ViewBuilder
-    private func contextMenuButton(
-        title: String,
-        systemImage: String,
-        context: VaultNavigationContext
-    ) -> some View {
-        Button {
-            navigationContext = context
-        } label: {
-            HStack {
-                Label(title, systemImage: systemImage)
-                Spacer()
-                if navigationContext == context {
-                    Image(systemName: "checkmark")
-                }
-            }
+    private var contextOptions: [SearchableSelectOption<VaultNavigationContext>] {
+        [
+            SearchableSelectOption(
+                value: .allVaults,
+                title: "All Vaults",
+                systemImage: "square.stack.3d.up"
+            ),
+            SearchableSelectOption(
+                value: .personal,
+                title: "My Vault",
+                systemImage: "person.crop.circle"
+            )
+        ] + organizations.map { organization in
+            SearchableSelectOption(
+                value: .organization(organization.id),
+                title: organization.name,
+                systemImage: "building.2"
+            )
         }
-        .accessibilityLabel(title)
-        .accessibilityValue(navigationContext == context ? "Selected" : "Not selected")
     }
 
     private var navigationContextIcon: String {

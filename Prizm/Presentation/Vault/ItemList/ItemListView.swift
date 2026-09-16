@@ -34,9 +34,7 @@ struct ItemListView: View {
     @State private var duplicateViewModel: ItemTransferViewModel?
     @State private var searchTypeFilter: ItemType?
     @State private var searchSortOrder: ItemSearchSortOrder = .nameAscending
-    @State private var hoveredItemID: String?
     @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.isHoverSuppressed) private var isHoverSuppressed
 
     private var visibleItems: [VaultItem] {
         let filtered = if let searchTypeFilter {
@@ -97,33 +95,16 @@ struct ItemListView: View {
                         ForEach(sections, id: \.letter) { section in
                             Section(header: Text(section.letter)) {
                                 ForEach(section.items, id: \.id) { item in
-                                    ItemRowView(item: item, faviconLoader: faviconLoader, searchQuery: searchQuery,
-                                                orgName: orgName(for: item),
-                                                isEmphasized: selection.contains(item.id))
-                                        .listRowSeparator(.hidden)
-                                        .listRowBackground(
-                                            RoundedRectangle(cornerRadius: Spacing.contextPickerCornerRadius)
-                                                .fill(
-                                                    selection.contains(item.id)
-                                                        ? Color.accentColor
-                                                        : hoveredItemID == item.id
-                                                            ? Color.primary.opacity(Opacity.itemRowHover(contrast))
-                                                            : Color.clear
-                                                )
-                                                .padding(.horizontal, Spacing.itemHighlightHorizontalMargin)
-                                        )
+                                    HoverableItemListRow(
+                                        item: item,
+                                        faviconLoader: faviconLoader,
+                                        searchQuery: searchQuery,
+                                        orgName: orgName(for: item),
+                                        isEmphasized: selection.contains(item.id)
+                                    )
                                         .tag(item.id)
                                         .id(item.id)
                                         .draggable(item.id)
-                                        .onHover { hovering in
-                                            optionalAnimation(.easeInOut(duration: 0.15)) {
-                                                if hovering && !isHoverSuppressed {
-                                                    hoveredItemID = item.id
-                                                } else if hoveredItemID == item.id {
-                                                    hoveredItemID = nil
-                                                }
-                                            }
-                                        }
                                         .accessibilityIdentifier(AccessibilityID.ItemList.row(item.id))
                                         .contextMenu {
                                             let contextItems = contextItems(for: item)
@@ -200,9 +181,6 @@ struct ItemListView: View {
                     }
                     .onChange(of: visibleItems.map(\.id)) {
                         scrollToSelection(using: proxy)
-                    }
-                    .onChange(of: isHoverSuppressed) { _, suppressed in
-                        if suppressed { hoveredItemID = nil }
                     }
                     .onDeleteCommand {
                         requestSelectedItemsDeletion()
@@ -375,6 +353,48 @@ struct ItemListView: View {
         guard selectedItems.count > 1 ? onDeleteItems != nil : onDelete != nil else { return }
         itemsToDelete = selectedItems
         showDeleteAlert = true
+    }
+}
+
+private struct HoverableItemListRow: View {
+    let item: VaultItem
+    let faviconLoader: FaviconLoader
+    let searchQuery: String?
+    let orgName: String?
+    let isEmphasized: Bool
+
+    @State private var isHovered = false
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.isHoverSuppressed) private var isHoverSuppressed
+
+    var body: some View {
+        ItemRowView(
+            item: item,
+            faviconLoader: faviconLoader,
+            searchQuery: searchQuery,
+            orgName: orgName,
+            isEmphasized: isEmphasized
+        )
+        .listRowSeparator(.hidden)
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: Spacing.contextPickerCornerRadius)
+                .fill(
+                    isEmphasized
+                        ? Color.accentColor
+                        : isHovered
+                            ? Color.primary.opacity(Opacity.itemRowHover(contrast))
+                            : Color.clear
+                )
+                .padding(.horizontal, Spacing.itemHighlightHorizontalMargin)
+        )
+        .onHover { hovering in
+            optionalAnimation(.easeInOut(duration: 0.15)) {
+                isHovered = hovering && !isHoverSuppressed
+            }
+        }
+        .onChange(of: isHoverSuppressed) { _, suppressed in
+            if suppressed { isHovered = false }
+        }
     }
 }
 
@@ -655,32 +675,28 @@ private struct ItemTransferSheetContent: View {
                 }
 
                 Section("Destination") {
-                    Picker("Vault", selection: $viewModel.destinationOwner) {
-                        Text("My Vault").tag(ItemTransferViewModel.DestinationOwner.personal)
-                        ForEach(viewModel.organizations) { organization in
-                            Text(organization.name)
-                                .tag(ItemTransferViewModel.DestinationOwner.organization(organization.id))
-                        }
-                    }
+                    SearchableSelect(
+                        title: "Vault",
+                        selection: $viewModel.destinationOwner,
+                        options: vaultOptions
+                    )
                     .onChange(of: viewModel.destinationOwner) {
                         viewModel.destinationOwnerChanged()
                     }
 
                     switch viewModel.destinationOwner {
                     case .personal:
-                        Picker("Folder", selection: $viewModel.folderId) {
-                            Text("No Folder").tag(String?.none)
-                            ForEach(viewModel.folders) { folder in
-                                Text(folder.name).tag(Optional(folder.id))
-                            }
-                        }
+                        SearchableSelect(
+                            title: "Folder",
+                            selection: $viewModel.folderId,
+                            options: folderOptions
+                        )
                     case .organization:
-                        Picker("Collection", selection: $viewModel.collectionId) {
-                            Text("Default Collection").tag(String?.none)
-                            ForEach(viewModel.destinationCollections) { collection in
-                                Text(collection.name).tag(Optional(collection.id))
-                            }
-                        }
+                        SearchableSelect(
+                            title: "Collection",
+                            selection: $viewModel.collectionId,
+                            options: collectionOptions
+                        )
                     }
                 }
 
@@ -758,6 +774,54 @@ private struct ItemTransferSheetContent: View {
             if let message {
                 AccessibilityNotification.Announcement(message).post()
             }
+        }
+    }
+
+    private var vaultOptions: [SearchableSelectOption<ItemTransferViewModel.DestinationOwner>] {
+        [
+            SearchableSelectOption(
+                value: .personal,
+                title: "My Vault",
+                systemImage: "person.crop.circle"
+            )
+        ] + viewModel.organizations.map { organization in
+            SearchableSelectOption(
+                value: .organization(organization.id),
+                title: organization.name,
+                systemImage: "building.2"
+            )
+        }
+    }
+
+    private var folderOptions: [SearchableSelectOption<String?>] {
+        [
+            SearchableSelectOption(
+                value: nil,
+                title: "No Folder",
+                systemImage: "tray"
+            )
+        ] + viewModel.folders.map { folder in
+            SearchableSelectOption(
+                value: Optional(folder.id),
+                title: folder.name,
+                systemImage: "folder"
+            )
+        }
+    }
+
+    private var collectionOptions: [SearchableSelectOption<String?>] {
+        [
+            SearchableSelectOption(
+                value: nil,
+                title: "Default Collection",
+                systemImage: "tray"
+            )
+        ] + viewModel.destinationCollections.map { collection in
+            SearchableSelectOption(
+                value: Optional(collection.id),
+                title: collection.name,
+                systemImage: "square.stack"
+            )
         }
     }
 }

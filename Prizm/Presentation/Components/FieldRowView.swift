@@ -78,7 +78,7 @@ struct FieldRowView: View {
         .background {
             Rectangle()
                 .fill(isHovered && hasValue
-                    ? Color.primary.opacity(Opacity.fieldHover(contrast))
+                    ? Color.accentColor.opacity(Opacity.fieldHover(contrast))
                     : Color.clear)
         }
         .contentShape(Rectangle())
@@ -234,7 +234,8 @@ struct FieldRowView: View {
 
 }
 
-private struct LargeTypeFieldView: View {
+/// Shared by `FieldRowView` and `TOTPCodeView` so every copyable value offers the same large-type preview.
+struct LargeTypeFieldView: View {
     let label: String
     let value: String
 

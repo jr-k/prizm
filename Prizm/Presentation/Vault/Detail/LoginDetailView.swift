@@ -70,8 +70,6 @@ struct LoginDetailView: View {
                             generator: totpCodeGenerator,
                             onCopy: onCopy
                         )
-                        .padding(.vertical, Spacing.rowVertical)
-                        .padding(.horizontal, Spacing.rowHorizontal)
                     }
                 }
 

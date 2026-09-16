@@ -209,8 +209,7 @@ final class AppContainer: ObservableObject {
                           folders: folders, organizations: organizations, collections: collections,
                           uploadAttachmentUseCase: uploadAttachmentUseCase,
                           deleteAttachmentUseCase: deleteAttachmentUseCase,
-                          attachmentFilePicker: Self.defaultNSOpenPanel,
-                          totpCodeGenerator: totpCodeGenerator)
+                          attachmentFilePicker: Self.defaultNSOpenPanel)
     }
 
     /// Creates an `ItemEditViewModel` in create mode for the given item type.
@@ -232,8 +231,7 @@ final class AppContainer: ObservableObject {
         return ItemEditViewModel(
             type: type, useCase: createVaultItemUseCase, folders: folders,
             folderId: folderId, organizationId: orgId, collectionIds: colIds,
-            organizations: organizations, collections: collections,
-            totpCodeGenerator: totpCodeGenerator
+            organizations: organizations, collections: collections
         )
     }
 

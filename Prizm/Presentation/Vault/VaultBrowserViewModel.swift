@@ -28,10 +28,8 @@ final class VaultBrowserViewModel: ObservableObject {
         didSet {
             if oldValue != sidebarSelection {
                 if isGlobalSearch { deactivateGlobalSearch(restoreSelection: false) }
-                Task { @MainActor [weak self] in
-                    self?.itemSelection = nil
-                    self?.refreshItems()
-                }
+                itemSelection = nil
+                refreshItems(showLoadingIndicator: true)
             }
         }
     }
@@ -56,7 +54,7 @@ final class VaultBrowserViewModel: ObservableObject {
             }
             itemSelection = nil
             if sidebarSelection == .allItems {
-                refreshItems()
+                refreshItems(showLoadingIndicator: true)
             } else {
                 sidebarSelection = .allItems
             }
@@ -64,7 +62,12 @@ final class VaultBrowserViewModel: ObservableObject {
         }
     }
     @Published var searchQuery:   String = "" {
-        didSet { Task { @MainActor in refreshItems() } }
+        didSet {
+            if !searchQuery.isEmpty, oldValue != searchQuery {
+                itemSelection = nil
+            }
+            Task { @MainActor in refreshItems() }
+        }
     }
     @Published private(set) var searchSuggestions: [VaultItem] = []
 
@@ -75,6 +78,7 @@ final class VaultBrowserViewModel: ObservableObject {
     private(set) var previousSelection: SidebarSelection?
 
     @Published private(set) var displayedItems: [VaultItem] = []
+    @Published private(set) var isLoadingItems = false
     @Published private(set) var itemCounts: [SidebarSelection: Int] = [:]
     @Published private(set) var folders: [Folder] = []
     @Published private(set) var organizations: [Organization] = []
@@ -127,6 +131,7 @@ final class VaultBrowserViewModel: ObservableObject {
     private let deleteCollectionUseCase:  any DeleteCollectionUseCase
     private var syncTimestamp:          any SyncTimestampRepository
     private var getLastSyncDate:        any GetLastSyncDateUseCase
+    private var itemRefreshGeneration = 0
     private let logger = Logger(subsystem: "com.prizm", category: "VaultBrowserViewModel")
 
     // MARK: - Menu bar action relay
@@ -180,6 +185,7 @@ final class VaultBrowserViewModel: ObservableObject {
 
     private var clipboardClearTask: Task<Void, Never>?
     private var searchSuggestionTask: Task<Void, Never>?
+    private var searchSuggestionGeneration = 0
 
     // MARK: - Init
 
@@ -270,6 +276,8 @@ final class VaultBrowserViewModel: ObservableObject {
 
     func updateSearchSuggestions(query: String) {
         searchSuggestionTask?.cancel()
+        searchSuggestionGeneration += 1
+        let generation = searchSuggestionGeneration
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             searchSuggestions = []
@@ -281,13 +289,16 @@ final class VaultBrowserViewModel: ObservableObject {
             do {
                 let results = try await search.execute(query: trimmed, in: .allItems)
                 try Task.checkCancellation()
-                guard requestedContext == navigationContext else { return }
+                guard generation == searchSuggestionGeneration,
+                      requestedContext == navigationContext else { return }
                 searchSuggestions = results.filter {
                     isInNavigationContext($0, context: requestedContext)
                 }
             } catch is CancellationError {
                 return
             } catch {
+                guard generation == searchSuggestionGeneration,
+                      requestedContext == navigationContext else { return }
                 logger.error("Search suggestions failed: \(error.localizedDescription, privacy: .public)")
                 searchSuggestions = []
             }
@@ -331,10 +342,22 @@ final class VaultBrowserViewModel: ObservableObject {
 
     /// Refreshes `displayedItems` from the vault store based on current selection + search query.
     /// Executes the vault read on the actor executor via a fire-and-forget `Task`.
-    func refreshItems() {
+    func refreshItems(showLoadingIndicator: Bool = false) {
+        itemRefreshGeneration += 1
+        let generation = itemRefreshGeneration
+        let requestedQuery = searchQuery
+        if showLoadingIndicator {
+            isLoadingItems = true
+        }
+
         Task { [weak self] in
             guard let self else { return }
             let requestedContext = navigationContext
+            defer {
+                if generation == itemRefreshGeneration {
+                    isLoadingItems = false
+                }
+            }
             do {
                 let scope: SidebarSelection
                 if isGlobalSearch {
@@ -343,15 +366,22 @@ final class VaultBrowserViewModel: ObservableObject {
                 } else {
                     scope = sidebarSelection
                 }
-                let results = try await search.execute(query: searchQuery, in: scope)
-                guard requestedContext == navigationContext else { return }
+                let results = try await search.execute(query: requestedQuery, in: scope)
+                guard generation == itemRefreshGeneration,
+                      requestedContext == navigationContext else { return }
                 displayedItems = results.filter { isInNavigationContext($0, context: requestedContext) }
                 let visibleSelection = selectedItemIDs.intersection(displayedItems.map(\.id))
                 if visibleSelection != selectedItemIDs {
                     updateItemSelection(visibleSelection)
                 }
+                if !requestedQuery.isEmpty,
+                   selectedItemIDs.isEmpty,
+                   let firstItem = displayedItems.first {
+                    updateItemSelection([firstItem.id])
+                }
             } catch {
-                guard requestedContext == navigationContext else { return }
+                guard generation == itemRefreshGeneration,
+                      requestedContext == navigationContext else { return }
                 logger.error("Failed to load vault items: \(error.localizedDescription, privacy: .public)")
                 displayedItems = []
             }

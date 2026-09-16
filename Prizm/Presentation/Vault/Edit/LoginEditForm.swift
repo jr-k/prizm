@@ -10,7 +10,6 @@ import SwiftUI
 struct LoginEditForm: View {
 
     @Binding var draft: DraftLoginContent
-    let totpCodeGenerator: any TOTPCodeGenerating
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -77,14 +76,14 @@ struct LoginEditForm: View {
                     configuration: Binding(
                         get: { draft.totp ?? "" },
                         set: { draft.totp = $0 }
-                    ),
-                    generator: totpCodeGenerator
+                    )
                 )
                 Divider()
                 Button("Remove Authenticator", role: .destructive) {
                     draft.totp = nil
                 }
                 .buttonStyle(.borderless)
+                .foregroundStyle(.red)
                 .padding(.vertical, Spacing.rowVertical)
                 .padding(.horizontal, Spacing.rowHorizontal)
                 .accessibilityLabel("Remove authenticator")
@@ -107,7 +106,6 @@ struct LoginEditForm: View {
 
 private struct TOTPSecretEditView: View {
     @Binding var configuration: String
-    let generator: any TOTPCodeGenerating
 
     @FocusState private var isFieldFocused: Bool
 
@@ -118,6 +116,17 @@ private struct TOTPSecretEditView: View {
                 .foregroundStyle(.secondary)
 
             HStack(spacing: Spacing.fieldActionGap) {
+                Button {
+                    isFieldFocused.toggle()
+                } label: {
+                    Image(systemName: isFieldFocused ? "eye.slash" : "eye")
+                        .imageScale(.medium)
+                        .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help(isFieldFocused ? "Hide" : "Edit")
+                .accessibilityLabel(isFieldFocused ? "Hide authenticator key" : "Edit authenticator key")
+
                 TextField("Base32 key or otpauth URI", text: $configuration)
                     .font(Typography.fieldValue.monospaced())
                     .textFieldStyle(.plain)
@@ -133,23 +142,6 @@ private struct TOTPSecretEditView: View {
                     }
                     .accessibilityLabel("Authenticator key")
                     .accessibilityValue(isFieldFocused ? configuration : "Hidden")
-
-                Button {
-                    isFieldFocused.toggle()
-                } label: {
-                    Image(systemName: isFieldFocused ? "eye.slash" : "eye")
-                }
-                .buttonStyle(.plain)
-                .help(isFieldFocused ? "Hide" : "Edit")
-                .accessibilityLabel(isFieldFocused ? "Hide authenticator key" : "Edit authenticator key")
-            }
-
-            if !configuration.isEmpty {
-                TOTPCodeView(
-                    configuration: configuration,
-                    generator: generator,
-                    showsErrors: true
-                )
             }
         }
         .padding(.vertical, Spacing.rowVertical)
@@ -163,6 +155,15 @@ struct TOTPCodeView: View {
     var showsErrors = false
     var onCopy: ((String) -> Void)? = nil
 
+    @State private var isHovered = false
+    @State private var showCopied = false
+    @State private var copyFeedbackTask: Task<Void, Never>?
+    /// Snapshot of the code when "Show in Large Type" was chosen. Captured rather than
+    /// re-read live so the sheet does not silently change digits mid-read when the period rolls over.
+    @State private var largeTypeCode: String?
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.isHoverSuppressed) private var isHoverSuppressed
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             switch displayState(at: context.date) {
@@ -172,41 +173,102 @@ struct TOTPCodeView: View {
                         Text("One-Time Password")
                             .font(Typography.fieldLabel)
                             .foregroundStyle(.secondary)
-                        Text(formatted(code.value))
+
+                        HStack(spacing: Spacing.fieldActionGap) {
+                            // Separate Text views rather than "XXX • XXX" in one string: in a
+                            // monospaced font every space is a full glyph cell, which pushed the
+                            // separator too far from the digits.
+                            HStack(spacing: Spacing.totpGroupGap) {
+                                Text(codeHalves(code.value).first)
+                                Text("•")
+                                    .foregroundStyle(.tertiary)
+                                Text(codeHalves(code.value).second)
+                            }
                             .font(Typography.fieldValue.monospaced())
                             .textSelection(.enabled)
+
+                            HStack(spacing: Spacing.totpRingGap) {
+                                TOTPCountdownRing(
+                                    progress: Double(code.secondsRemaining) / Double(max(code.period, 1)),
+                                    tint: code.secondsRemaining <= 10 ? Color.red : Color.green
+                                )
+
+                                Text(paddedSeconds(code.secondsRemaining))
+                                    .font(Typography.totpCountdown)
+                            }
+                            .padding(.horizontal, Spacing.badgeHorizontal)
+                            .padding(.vertical, Spacing.totpBadgeVertical)
+                            .background(
+                                Color.primary.opacity(Opacity.fieldHover(contrast)),
+                                in: Capsule()
+                            )
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("Time remaining")
+                            .accessibilityValue("\(code.secondsRemaining) seconds")
+                        }
                     }
-                    .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("One-time password \(code.value)")
 
                     Spacer()
 
-                    Gauge(
-                        value: Double(code.period - code.secondsRemaining),
-                        in: 0...Double(code.period)
-                    ) {
-                        Text("Time remaining")
-                    } currentValueLabel: {
-                        Text("\(code.secondsRemaining)")
-                            .font(Typography.utility)
-                    }
-                    .gaugeStyle(.accessoryCircularCapacity)
-                    .controlSize(.small)
-                    .accessibilityLabel("Time remaining")
-                    .accessibilityValue("\(code.secondsRemaining) seconds")
+                    if isHovered {
+                        HStack(spacing: Spacing.headerGap) {
+                            if onCopy != nil {
+                                Text("Copy")
+                                    .font(Typography.utility.weight(.semibold))
+                                    .textCase(.uppercase)
+                                    .foregroundStyle(Color.accentColor)
+                                    .transition(.opacity)
+                            }
 
-                    if let onCopy {
-                        Button {
-                            onCopy(code.value)
-                        } label: {
-                            Label("Copy", systemImage: "doc.on.doc")
-                                .font(Typography.utility.weight(.semibold))
-                                .textCase(.uppercase)
+                            actionsMenu(for: code.value)
                         }
-                        .buttonStyle(.borderless)
-                        .help("Copy one-time password")
-                        .accessibilityLabel("Copy one-time password")
                     }
+                }
+                .padding(.vertical, Spacing.rowVertical)
+                .padding(.horizontal, Spacing.rowHorizontal)
+                .background {
+                    Rectangle()
+                        .fill(isHovered
+                            ? Color.accentColor.opacity(Opacity.fieldHover(contrast))
+                            : Color.clear)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { copy(code.value) }
+                .onHover { hovering in
+                    optionalAnimation(.easeInOut(duration: 0.15)) {
+                        isHovered = hovering && !isHoverSuppressed
+                    }
+                }
+                .onChange(of: isHoverSuppressed) { _, suppressed in
+                    if suppressed { isHovered = false }
+                }
+                .overlay(alignment: .topTrailing) {
+                    if showCopied {
+                        Label("Copied", systemImage: "checkmark")
+                            .font(Typography.utility.weight(.semibold))
+                            .foregroundStyle(DesignColor.selectedContentForeground)
+                            .padding(.horizontal, Spacing.toastHorizontal)
+                            .padding(.vertical, Spacing.toastVertical)
+                            .background(Color.accentColor, in: Capsule())
+                            .padding(.trailing, Spacing.rowHorizontal)
+                            .transition(.opacity.combined(with: .scale))
+                            .accessibilityHidden(true)
+                    }
+                }
+                .sheet(isPresented: isShowingLargeType) {
+                    LargeTypeFieldView(label: "One-Time Password", value: largeTypeCode ?? "")
+                }
+                .onDisappear {
+                    copyFeedbackTask?.cancel()
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("One-time password \(code.value)")
+                .accessibilityHint(onCopy == nil ? "" : "Click to copy")
+                .accessibilityAction(named: "Copy") {
+                    copy(code.value)
+                }
+                .accessibilityAction(named: "Show in Large Type") {
+                    largeTypeCode = code.value
                 }
             case .error(let message):
                 if showsErrors {
@@ -219,6 +281,55 @@ struct TOTPCodeView: View {
         }
     }
 
+    private var isShowingLargeType: Binding<Bool> {
+        Binding(
+            get: { largeTypeCode != nil },
+            set: { if !$0 { largeTypeCode = nil } }
+        )
+    }
+
+    private func actionsMenu(for code: String) -> some View {
+        Menu {
+            if onCopy != nil {
+                Button("Copy", systemImage: "doc.on.doc") {
+                    copy(code)
+                }
+                .accessibilityIdentifier(AccessibilityID.Field.copyButton("One-Time Password"))
+            }
+
+            Button("Show in Large Type", systemImage: "textformat.size.larger") {
+                largeTypeCode = code
+            }
+        } label: {
+            Image(systemName: "chevron.down")
+                .imageScale(.small)
+                .foregroundStyle(Color.accentColor)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More actions for one-time password")
+        .accessibilityLabel("More actions for one-time password")
+    }
+
+    private func copy(_ code: String) {
+        guard let onCopy else { return }
+        onCopy(code)
+
+        copyFeedbackTask?.cancel()
+        optionalAnimation(.easeInOut(duration: 0.1)) { showCopied = true }
+        AccessibilityNotification.Announcement("One-time password copied").post()
+        copyFeedbackTask = Task {
+            do {
+                try await Task.sleep(for: .seconds(1.2))
+                guard !Task.isCancelled else { return }
+                optionalAnimation(.easeInOut(duration: 0.1)) { showCopied = false }
+            } catch {
+                // A newer copy action owns the feedback lifetime.
+            }
+        }
+    }
+
     private func displayState(at date: Date) -> DisplayState {
         do {
             return .code(try generator.generateCode(from: configuration, at: date))
@@ -227,14 +338,42 @@ struct TOTPCodeView: View {
         }
     }
 
-    private func formatted(_ code: String) -> String {
+    private func codeHalves(_ code: String) -> (first: String, second: String) {
         let midpoint = code.index(code.startIndex, offsetBy: code.count / 2)
-        return "\(code[..<midpoint]) \(code[midpoint...])"
+        return (String(code[..<midpoint]), String(code[midpoint...]))
+    }
+
+    private func paddedSeconds(_ seconds: Int) -> String {
+        seconds < 10 ? "0\(seconds)" : "\(seconds)"
     }
 
     private enum DisplayState {
         case code(TOTPCode)
         case error(String)
+    }
+}
+
+/// Compact countdown ring for the TOTP badge.
+///
+/// A hand-drawn `Circle().trim` rather than `Gauge(.accessoryCircularCapacity)`: the system
+/// gauge ignores an explicit `.frame` below its intrinsic size and renders its label inside
+/// the ring, which overflowed the badge at the 12 pt size this row needs.
+private struct TOTPCountdownRing: View {
+    /// Fraction of the period still remaining, 0...1. Drawn clockwise from 12 o'clock.
+    let progress: Double
+    let tint: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(tint.opacity(0.25), lineWidth: LayoutMetrics.totpProgressLineWidth)
+            Circle()
+                .trim(from: 0, to: min(max(progress, 0), 1))
+                .stroke(tint, style: StrokeStyle(lineWidth: LayoutMetrics.totpProgressLineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: LayoutMetrics.totpProgressDiameter, height: LayoutMetrics.totpProgressDiameter)
+        .accessibilityHidden(true)
     }
 }
 

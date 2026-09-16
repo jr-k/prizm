@@ -114,7 +114,7 @@ struct VaultBrowserView: View {
                     get: { viewModel.isGlobalSearch ? nil : viewModel.sidebarSelection },
                     set: { newValue in
                         if let value = newValue {
-                            Task { @MainActor in viewModel.sidebarSelection = value }
+                            viewModel.sidebarSelection = value
                         }
                     }
                 ),
@@ -158,7 +158,11 @@ struct VaultBrowserView: View {
         }
         .disabled(viewModel.isEditingItem)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .navigationSplitViewColumnWidth(min: 180, ideal: 210)
+        .navigationSplitViewColumnWidth(
+            min: VaultLayoutMetrics.sidebarMinimumWidth,
+            ideal: VaultLayoutMetrics.sidebarIdealWidth,
+            max: VaultLayoutMetrics.sidebarMaximumWidth
+        )
     }
 
     private var sharedSearchBar: some View {
@@ -171,6 +175,11 @@ struct VaultBrowserView: View {
                     .textFieldStyle(.plain)
                     .focused($isSearchFieldFocused)
                     .onSubmit { commitSelectedSearchSuggestionOrShowAll() }
+                    .onKeyPress(keys: [.return]) { keyPress in
+                        guard keyPress.modifiers.contains(.command) else { return .ignored }
+                        commitSelectedSearchSuggestionOrShowAll()
+                        return .handled
+                    }
                     .onKeyPress(.downArrow) {
                         moveSearchSuggestion(by: 1)
                         return .handled
@@ -328,6 +337,7 @@ struct VaultBrowserView: View {
             )
             .accessibilityValue(isShowAllSearchSelected ? "Selected" : "Not selected")
         }
+        .padding(.top, Spacing.headerGap)
         .background(
             .regularMaterial,
             in: RoundedRectangle(cornerRadius: VaultLayoutMetrics.searchCornerRadius)
@@ -435,7 +445,12 @@ struct VaultBrowserView: View {
     private var itemListPane: some View {
         VStack(spacing: 0) {
             syncErrorBanner
-            if viewModel.sidebarSelection == .trash {
+            if viewModel.isLoadingItems {
+                ProgressView()
+                    .controlSize(.regular)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .accessibilityLabel("Loading items")
+            } else if viewModel.sidebarSelection == .trash {
                 TrashView(
                     items:             viewModel.displayedItems,
                     selection:         $viewModel.itemSelection,
@@ -573,6 +588,11 @@ struct VaultBrowserView: View {
             selectedSearchSuggestionID = nil
             isShowAllSearchSelected = false
             viewModel.updateSearchSuggestions(query: query)
+        }
+        .onReceive(viewModel.$searchSuggestions) { suggestions in
+            guard shouldShowSearchSuggestions else { return }
+            selectedSearchSuggestionID = suggestions.first?.id
+            isShowAllSearchSelected = false
         }
         .onChange(of: viewModel.searchQuery) { _, newValue in
             if newValue.isEmpty && viewModel.isGlobalSearch {
@@ -824,6 +844,9 @@ struct ItemLocationBreadcrumb: View {
 }
 
 private enum VaultLayoutMetrics {
+    static let sidebarMinimumWidth: CGFloat = 180
+    static let sidebarIdealWidth: CGFloat = 210
+    static let sidebarMaximumWidth: CGFloat = 480
     static let itemListMinimumWidth: CGFloat = 220
     static let itemListIdealWidth: CGFloat = 280
     static let itemListMaximumWidth: CGFloat = 420

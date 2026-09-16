@@ -77,26 +77,26 @@ struct ItemEditView: View {
                     // multiple collections, extra collection IDs (outside this org) are
                     // preserved on save; only the selected collection within this org changes.
                     let orgCollectionIds = Set(orgCollections.map(\.id))
+                    let selectedCollection = Binding<String?>(
+                        get: {
+                            viewModel.draft.collectionIds.first { orgCollectionIds.contains($0) }
+                        },
+                        set: { newId in
+                            // Replace only the collection IDs that belong to this org;
+                            // preserve any IDs from other orgs (should not exist in practice
+                            // but guards against cross-org data loss).
+                            let otherIds = viewModel.draft.collectionIds.filter { !orgCollectionIds.contains($0) }
+                            viewModel.draft.collectionIds = otherIds + (newId.map { [$0] } ?? [])
+                        }
+                    )
                     DetailSectionCard("Collection") {
                         HStack {
-                            Picker(selection: Binding(
-                                get: {
-                                    viewModel.draft.collectionIds.first { orgCollectionIds.contains($0) }
-                                },
-                                set: { newId in
-                                    // Replace only the collection IDs that belong to this org;
-                                    // preserve any IDs from other orgs (should not exist in practice
-                                    // but guards against cross-org data loss).
-                                    let otherIds = viewModel.draft.collectionIds.filter { !orgCollectionIds.contains($0) }
-                                    viewModel.draft.collectionIds = otherIds + (newId.map { [$0] } ?? [])
-                                }
-                            )) {
-                                Text("None").tag(String?.none)
-                                ForEach(orgCollections) { col in
-                                    Text(col.name).tag(Optional(col.id))
-                                }
-                            } label: { EmptyView() }
-                            .pickerStyle(.menu)
+                            SearchableSelect(
+                                title: "Collection",
+                                selection: selectedCollection,
+                                options: collectionOptions(orgCollections),
+                                displaysLabel: false
+                            )
                             Spacer()
                         }
                         .padding(.vertical, Spacing.rowVertical)
@@ -106,13 +106,12 @@ struct ItemEditView: View {
             } else if !viewModel.folders.isEmpty {
                 DetailSectionCard("Folder") {
                     HStack {
-                        Picker(selection: $viewModel.draft.folderId) {
-                            Text("None").tag(String?.none)
-                            ForEach(viewModel.folders) { folder in
-                                Text(folder.name).tag(Optional(folder.id))
-                            }
-                        } label: { EmptyView() }
-                        .pickerStyle(.menu)
+                        SearchableSelect(
+                            title: "Folder",
+                            selection: $viewModel.draft.folderId,
+                            options: folderOptions,
+                            displaysLabel: false
+                        )
                         Spacer()
                     }
                     .padding(.vertical, Spacing.rowVertical)
@@ -183,6 +182,32 @@ struct ItemEditView: View {
         }
         .onChange(of: closeTrigger) {
             handleDiscard()
+        }
+    }
+
+    private var folderOptions: [SearchableSelectOption<String?>] {
+        [
+            SearchableSelectOption(value: nil, title: "None", systemImage: "tray")
+        ] + viewModel.folders.map { folder in
+            SearchableSelectOption(
+                value: Optional(folder.id),
+                title: folder.name,
+                systemImage: "folder"
+            )
+        }
+    }
+
+    private func collectionOptions(
+        _ collections: [OrgCollection]
+    ) -> [SearchableSelectOption<String?>] {
+        [
+            SearchableSelectOption(value: nil, title: "None", systemImage: "tray")
+        ] + collections.map { collection in
+            SearchableSelectOption(
+                value: Optional(collection.id),
+                title: collection.name,
+                systemImage: "square.stack"
+            )
         }
     }
 
@@ -258,8 +283,7 @@ struct ItemEditView: View {
                         return c
                     },
                     set:  { newContent in viewModel.draft.content = .login(newContent) }
-                ),
-                totpCodeGenerator: viewModel.totpCodeGenerator
+                )
             )
 
         case .card(let content):

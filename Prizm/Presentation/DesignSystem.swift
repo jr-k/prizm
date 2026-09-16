@@ -44,6 +44,11 @@ enum Typography {
     /// Utility text: COPY button, footer dates, metadata.
     static let utility: Font       = .caption
 
+    /// Seconds remaining in the TOTP countdown badge.
+    /// `.monospaced` design (SF Mono) rather than `.monospacedDigit()`: SF Mono has a slashed
+    /// zero and tabular glyphs, so "00"→"09" stay legible and the badge width never jitters.
+    static let totpCountdown: Font = .system(.caption, design: .monospaced)
+
     /// Item name in the list pane.
     static let listTitle: Font     = .body
 
@@ -121,6 +126,17 @@ enum Spacing {
     /// Gap between trailing field actions.
     static let fieldActionGap: CGFloat = 6
 
+    /// Gap between a TOTP digit group and its middle-dot separator.
+    /// Tighter than a monospaced space cell so the dot reads as part of the code.
+    static let totpGroupGap: CGFloat = 4
+
+    /// Gap between the TOTP countdown ring and its seconds label inside the badge.
+    static let totpRingGap: CGFloat = 5
+
+    /// Vertical inner padding of the TOTP countdown badge.
+    /// Taller than `badgeVertical` so the ring has breathing room above and below its stroke.
+    static let totpBadgeVertical: CGFloat = 3
+
     /// Padding inside transient copy confirmation capsules.
     static let toastHorizontal: CGFloat = 10
 
@@ -188,6 +204,15 @@ enum Spacing {
 
     /// Horizontal padding on full-screen auth/sync flows (Login, TOTP, Unlock, SyncProgress).
     static let screenHorizontal: CGFloat = 40
+
+    /// Inner padding for searchable select triggers and result rows.
+    static let searchableSelectPadding: CGFloat = 8
+
+    /// Gap between the searchable select icon, label, and trailing controls.
+    static let searchableSelectGap: CGFloat = 7
+
+    /// Breathing room between searchable select content and popover edges.
+    static let searchableSelectPopoverPadding: CGFloat = 12
 }
 
 // MARK: - Layout Metrics
@@ -196,9 +221,22 @@ enum LayoutMetrics {
     /// Shared height for the list filter bar and detail action bar.
     static let paneActionBarHeight: CGFloat = 44
 
+    /// Compact countdown ring displayed beside a one-time password.
+    /// Sized to match the cap height of `Typography.utility` so it sits inline with the seconds.
+    static let totpProgressDiameter: CGFloat = 12
+
+    /// Stroke width of the TOTP countdown ring.
+    static let totpProgressLineWidth: CGFloat = 2
+
     /// Height of text inputs on full-screen authentication flows.
     static let authenticationInputHeight: CGFloat = 36
 
     /// Width of forms on full-screen authentication flows.
     static let authenticationFormWidth: CGFloat = 440
+
+    /// Width of the searchable select popover.
+    static let searchableSelectWidth: CGFloat = 380
+
+    /// Maximum height of the searchable select results list.
+    static let searchableSelectResultsHeight: CGFloat = 240
 }

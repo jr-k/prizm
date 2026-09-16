@@ -68,7 +68,7 @@ struct MaskedEditFieldRow: View {
 
     let label: String
     @Binding var value: String?
-    /// When non-nil, a generator wand button is shown that opens the password generator popover.
+    /// When non-nil, a generation button is shown that opens the password generator popover.
     /// The binding receives the generated value when the user taps "Use".
     var generatorBinding: Binding<String?>?
 
@@ -107,7 +107,7 @@ struct MaskedEditFieldRow: View {
                     }
                     showGenerator.toggle()
                 } label: {
-                    Image(systemName: "wand.and.stars")
+                    Image(systemName: "dice.fill")
                         .imageScale(.small)
                 }
                 .buttonStyle(.plain)

@@ -80,7 +80,6 @@ final class ItemEditViewModel: ObservableObject {
     private let uploadAttachmentUseCase: (any UploadAttachmentUseCase)?
     private let deleteAttachmentUseCase: (any DeleteAttachmentUseCase)?
     private let attachmentFilePicker: (@MainActor () -> [(url: URL, bytes: Int)])?
-    let totpCodeGenerator: any TOTPCodeGenerating
     private var deletedAttachmentIDs: Set<String> = []
     private var sourceItem: VaultItem?
     private let logger  = Logger(subsystem: "com.prizm", category: "ItemEditViewModel")
@@ -113,8 +112,7 @@ final class ItemEditViewModel: ObservableObject {
         collections: [OrgCollection] = [],
         uploadAttachmentUseCase: (any UploadAttachmentUseCase)? = nil,
         deleteAttachmentUseCase: (any DeleteAttachmentUseCase)? = nil,
-        attachmentFilePicker: (@MainActor () -> [(url: URL, bytes: Int)])? = nil,
-        totpCodeGenerator: any TOTPCodeGenerating
+        attachmentFilePicker: (@MainActor () -> [(url: URL, bytes: Int)])? = nil
     ) {
         self.draft         = DraftVaultItem(item)
         self.original      = DraftVaultItem(item)
@@ -123,7 +121,6 @@ final class ItemEditViewModel: ObservableObject {
         self.uploadAttachmentUseCase = uploadAttachmentUseCase
         self.deleteAttachmentUseCase = deleteAttachmentUseCase
         self.attachmentFilePicker = attachmentFilePicker
-        self.totpCodeGenerator = totpCodeGenerator
         self.attachments = item.attachments
         self.sourceItem = item
         self.folders       = folders
@@ -135,8 +132,7 @@ final class ItemEditViewModel: ObservableObject {
     /// Create mode: initialised with a blank draft for the given type.
     init(type: ItemType, useCase: any CreateVaultItemUseCase, folders: [Folder] = [],
          folderId: String? = nil, organizationId: String? = nil, collectionIds: [String] = [],
-         organizations: [Organization] = [], collections: [OrgCollection] = [],
-         totpCodeGenerator: any TOTPCodeGenerating) {
+         organizations: [Organization] = [], collections: [OrgCollection] = []) {
         var blank = DraftVaultItem.blank(type: type)
         blank.folderId       = folderId
         blank.organizationId = organizationId
@@ -148,7 +144,6 @@ final class ItemEditViewModel: ObservableObject {
         self.uploadAttachmentUseCase = nil
         self.deleteAttachmentUseCase = nil
         self.attachmentFilePicker = nil
-        self.totpCodeGenerator = totpCodeGenerator
         self.sourceItem = nil
         self.folders       = folders
         self.organizations = organizations
