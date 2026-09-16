@@ -7,6 +7,7 @@ struct ItemDetailView: View {
 
     let item:              VaultItem?
     let faviconLoader:     FaviconLoader
+    let totpCodeGenerator: any TOTPCodeGenerating
     let folders:           [Folder]
     var organizations:     [Organization] = []
     let onCopy:            (String) -> Void
@@ -242,7 +243,13 @@ struct ItemDetailView: View {
     @ViewBuilder
     private func typeDetailView(for item: VaultItem) -> some View {
         switch item.content {
-        case .login(let l):      LoginDetailView(item: item, login: l, onCopy: onCopy)
+        case .login(let l):
+            LoginDetailView(
+                item: item,
+                login: l,
+                totpCodeGenerator: totpCodeGenerator,
+                onCopy: onCopy
+            )
         case .card(let c):       CardDetailView(item: item, card: c, onCopy: onCopy)
         case .identity(let i):   IdentityDetailView(item: item, identity: i, onCopy: onCopy)
         case .secureNote(let n): SecureNoteDetailView(item: item, secureNote: n, onCopy: onCopy)

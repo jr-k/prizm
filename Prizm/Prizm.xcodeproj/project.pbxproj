@@ -121,6 +121,8 @@
 		BB1016000000000000000016 /* AttachmentsSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1016000000000000000016 /* AttachmentsSectionView.swift */; };
 		BB1017000000000000000017 /* AttachmentRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1017000000000000000017 /* AttachmentRowView.swift */; };
 		BB1018000000000000000018 /* AttachmentTempFileManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1018000000000000000018 /* AttachmentTempFileManager.swift */; };
+		BB2001000000000000000001 /* TOTPCode.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2001000000000000000001 /* TOTPCode.swift */; };
+		BB2002000000000000000002 /* TOTPCodeGeneratorImpl.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2002000000000000000002 /* TOTPCodeGeneratorImpl.swift */; };
 		BB1122334455667788990011 /* CollectionTreeNode.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2233445566778899001122 /* CollectionTreeNode.swift */; };
 		C290678FFC8F4FDDB215C261 /* LoginUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257FAE34CC064783806B6A5C /* LoginUseCase.swift */; };
 		C2ACEC2617F14F5A80A7FCED /* DeleteFolderUseCase.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D05DB7E6EC4A74802AEE58 /* DeleteFolderUseCase.swift */; };
@@ -251,6 +253,8 @@
 		AA001CC0001CC0001CC0003A /* RenameCollectionUseCaseImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RenameCollectionUseCaseImpl.swift; sourceTree = "<group>"; };
 		AA001CC0001CC0001CC0005A /* DeleteCollectionUseCaseImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteCollectionUseCaseImpl.swift; sourceTree = "<group>"; };
 		AA1001000000000000000001 /* Attachment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Attachment.swift; sourceTree = "<group>"; };
+		AA2001000000000000000001 /* TOTPCode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOTPCode.swift; sourceTree = "<group>"; };
+		AA2002000000000000000002 /* TOTPCodeGeneratorImpl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TOTPCodeGeneratorImpl.swift; sourceTree = "<group>"; };
 		AA1002000000000000000002 /* AttachmentRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentRepository.swift; sourceTree = "<group>"; };
 		AA1003000000000000000003 /* VaultKeyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultKeyService.swift; sourceTree = "<group>"; };
 		AA1004000000000000000004 /* UploadAttachmentUseCase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadAttachmentUseCase.swift; sourceTree = "<group>"; };
@@ -407,6 +411,7 @@
 				AA1001000000000000000001 /* Attachment.swift */,
 				CF2F621523214454973153CC /* Organization.swift */,
 				070C477B0E134C1EAFFA842D /* OrgCollection.swift */,
+				AA2001000000000000000001 /* TOTPCode.swift */,
 			);
 			path = Entities;
 			sourceTree = "<group>";
@@ -473,6 +478,7 @@
 				3FBB82A6241244DD890E615C /* EncString.swift */,
 				D8D710BEABBB4ADD9ADFCD1F /* PrizmCryptoService.swift */,
 				AA1007000000000000000007 /* AttachmentCrypto.swift */,
+				AA2002000000000000000002 /* TOTPCodeGeneratorImpl.swift */,
 			);
 			path = Crypto;
 			sourceTree = "<group>";
@@ -897,6 +903,7 @@
 				AB64508ED7804841AAC551A0 /* KdfParams.swift in Sources */,
 				D034C4EF37844E88A91555A1 /* VaultItem.swift in Sources */,
 				3E04D7AC0223458CB329663C /* CustomField.swift in Sources */,
+				BB2001000000000000000001 /* TOTPCode.swift in Sources */,
 				FD30240C189E483CBB5E2E3B /* SidebarSelection.swift in Sources */,
 				2489593B92144CA7A107D531 /* AuthRepository.swift in Sources */,
 				87D4D13FF5F24C46B3588820 /* VaultRepository.swift in Sources */,
@@ -953,6 +960,7 @@
 				2A776694FA53418CB2002486 /* OrgKeyCache.swift in Sources */,
 				B2C3D4E5F6A748B9C0D1E2F3 /* EncString.swift in Sources */,
 				C3D4E5F6A7B849C0D1E2F3A4 /* PrizmCryptoService.swift in Sources */,
+				BB2002000000000000000002 /* TOTPCodeGeneratorImpl.swift in Sources */,
 				D4E5F6A7B8C94AD1E2F3A4B5 /* RawCipher.swift in Sources */,
 				E5F6A7B8C9D04BE2F3A4B5C6 /* SyncResponse.swift in Sources */,
 				F6A7B8C9D0E14CF3A4B5C6D7 /* CipherMapper.swift in Sources */,

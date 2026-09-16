@@ -11,6 +11,7 @@ struct LoginDetailView: View {
 
     let item:  VaultItem
     let login: LoginContent
+    let totpCodeGenerator: any TOTPCodeGenerating
     let onCopy: (String) -> Void
 
     // A Credentials card is only meaningful when at least one credential field is present.
@@ -59,6 +60,18 @@ struct LoginDetailView: View {
                                 onCopy: onCopy
                             )
                         }
+                    }
+                }
+
+                if let totp = login.totp, !totp.isEmpty {
+                    DetailSectionCard("Authenticator") {
+                        TOTPCodeView(
+                            configuration: totp,
+                            generator: totpCodeGenerator,
+                            onCopy: onCopy
+                        )
+                        .padding(.vertical, Spacing.rowVertical)
+                        .padding(.horizontal, Spacing.rowHorizontal)
                     }
                 }
 

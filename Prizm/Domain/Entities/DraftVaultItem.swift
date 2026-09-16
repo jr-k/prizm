@@ -32,15 +32,15 @@ nonisolated struct DraftLoginURI: Equatable, Identifiable {
 
 /// Mutable mirror of `CustomField` used exclusively within the edit flow.
 ///
-/// The name and value are mutable so fields can be created, renamed, edited, and removed from
-/// an item. The type and linked-field target remain stable while editing an existing field.
+/// The name, value, and linked-field target are mutable so fields can be created, renamed,
+/// edited, and removed from an item. The wire type remains stable after creation.
 nonisolated struct DraftCustomField: Equatable, Identifiable {
     let id = UUID()
     var name: String
     var value: String?
     let type: CustomFieldType
     /// Non-nil only when `type == .linked`.
-    let linkedId: LinkedFieldId?
+    var linkedId: LinkedFieldId?
 
     init(
         name: String = "",
@@ -79,8 +79,8 @@ nonisolated struct DraftLoginContent: Equatable {
     var username: String?
     var password: String?
     var uris: [DraftLoginURI]
-    /// TOTP seed is not editable in v1.
-    let totp: String?
+    /// Bitwarden-compatible Base32 secret or otpauth URI.
+    var totp: String?
     var notes: String?
     /// Custom fields can be created, renamed, edited, and removed.
     var customFields: [DraftCustomField]

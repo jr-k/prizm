@@ -14,6 +14,7 @@ final class AppContainer: ObservableObject {
 
     let apiClient:     PrizmAPIClientImpl
     let crypto:        PrizmCryptoServiceImpl
+    let totpCodeGenerator: TOTPCodeGeneratorImpl
     let keychain:      KeychainServiceImpl
     let biometricKeychain: BiometricKeychainServiceImpl
     let vaultStore:    VaultRepositoryImpl
@@ -70,6 +71,7 @@ final class AppContainer: ObservableObject {
     init() {
         let api           = PrizmAPIClientImpl()
         let crypto        = PrizmCryptoServiceImpl()
+        let totpCodeGenerator = TOTPCodeGeneratorImpl()
         let keychain      = KeychainServiceImpl()
         let biometricKeychain = BiometricKeychainServiceImpl()
         let keyCache      = VaultKeyCache()
@@ -110,6 +112,7 @@ final class AppContainer: ObservableObject {
 
         self.apiClient       = api
         self.crypto          = crypto
+        self.totpCodeGenerator = totpCodeGenerator
         self.keychain        = keychain
         self.biometricKeychain = biometricKeychain
         self.vaultStore      = vault
@@ -206,7 +209,8 @@ final class AppContainer: ObservableObject {
                           folders: folders, organizations: organizations, collections: collections,
                           uploadAttachmentUseCase: uploadAttachmentUseCase,
                           deleteAttachmentUseCase: deleteAttachmentUseCase,
-                          attachmentFilePicker: Self.defaultNSOpenPanel)
+                          attachmentFilePicker: Self.defaultNSOpenPanel,
+                          totpCodeGenerator: totpCodeGenerator)
     }
 
     /// Creates an `ItemEditViewModel` in create mode for the given item type.
@@ -228,7 +232,8 @@ final class AppContainer: ObservableObject {
         return ItemEditViewModel(
             type: type, useCase: createVaultItemUseCase, folders: folders,
             folderId: folderId, organizationId: orgId, collectionIds: colIds,
-            organizations: organizations, collections: collections
+            organizations: organizations, collections: collections,
+            totpCodeGenerator: totpCodeGenerator
         )
     }
 

@@ -52,10 +52,16 @@ extension View {
 struct DetailSectionCard<Content: View>: View {
 
     private let title: String?
+    private let showsBackground: Bool
     private let content: Content
 
-    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+    init(
+        _ title: String? = nil,
+        showsBackground: Bool = true,
+        @ViewBuilder content: () -> Content
+    ) {
         self.title = title
+        self.showsBackground = showsBackground
         self.content = content()
     }
 
@@ -70,14 +76,25 @@ struct DetailSectionCard<Content: View>: View {
                         AccessibilityID.Detail.cardHeader(title!)
                     )
             }
-            VStack(alignment: .leading, spacing: 0) {
-                content
-            }
-            .cardBackground()
+            cardContent
         }
         .padding(.horizontal, Spacing.pageMargin)
         .padding(.top, Spacing.cardTop)
         .padding(.bottom, Spacing.cardBottom)
+    }
+
+    @ViewBuilder
+    private var cardContent: some View {
+        if showsBackground {
+            VStack(alignment: .leading, spacing: 0) {
+                content
+            }
+            .cardBackground()
+        } else {
+            VStack(alignment: .leading, spacing: 0) {
+                content
+            }
+        }
     }
 
     // MARK: - Testable header logic

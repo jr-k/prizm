@@ -12,6 +12,7 @@ struct VaultBrowserView: View {
 
     @ObservedObject var viewModel: VaultBrowserViewModel
     let faviconLoader: FaviconLoader
+    let totpCodeGenerator: any TOTPCodeGenerating
     let makeEditViewModel: (VaultItem) -> ItemEditViewModel
     let makeCreateViewModel: (ItemType, String?) -> ItemEditViewModel
     let makeMoveViewModel: ([VaultItem]) -> ItemTransferViewModel
@@ -483,6 +484,7 @@ struct VaultBrowserView: View {
             ItemDetailView(
                 item:                           viewModel.itemSelection,
                 faviconLoader:                  faviconLoader,
+                totpCodeGenerator:              totpCodeGenerator,
                 folders:                        viewModel.folders,
                 organizations:                  viewModel.organizations,
                 onCopy:                         { viewModel.copy($0) },

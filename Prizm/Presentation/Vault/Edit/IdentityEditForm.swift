@@ -27,11 +27,11 @@ struct IdentityEditForm: View {
             }
 
             DetailSectionCard("ID Numbers") {
-                OptionalEditFieldRow(label: "SSN",             value: $draft.ssn)
+                MaskedEditFieldRow(label: "SSN",             value: $draft.ssn)
                 Divider()
-                OptionalEditFieldRow(label: "Passport Number", value: $draft.passportNumber)
+                MaskedEditFieldRow(label: "Passport Number", value: $draft.passportNumber)
                 Divider()
-                OptionalEditFieldRow(label: "License Number",  value: $draft.licenseNumber)
+                MaskedEditFieldRow(label: "License Number",  value: $draft.licenseNumber)
             }
 
             DetailSectionCard("Contact") {

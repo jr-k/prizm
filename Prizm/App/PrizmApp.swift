@@ -164,6 +164,7 @@ struct PrizmApp: App {
             VaultBrowserView(
                 viewModel:         rootVM.vaultBrowserVM,
                 faviconLoader:     container.faviconLoader,
+                totpCodeGenerator: container.totpCodeGenerator,
                 makeEditViewModel: { [vaultBrowserVM = rootVM.vaultBrowserVM] item in
                     let vm = container.makeItemEditViewModel(
                         for: item,

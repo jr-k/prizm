@@ -17,13 +17,13 @@ struct CardEditForm: View {
                 Divider()
                 OptionalEditFieldRow(label: "Brand", value: $draft.brand)
                 Divider()
-                OptionalEditFieldRow(label: "Number", value: $draft.number)
+                MaskedEditFieldRow(label: "Number", value: $draft.number)
                 Divider()
                 OptionalEditFieldRow(label: "Expiry Month", value: $draft.expMonth)
                 Divider()
                 OptionalEditFieldRow(label: "Expiry Year", value: $draft.expYear)
                 Divider()
-                OptionalEditFieldRow(label: "Security Code", value: $draft.code)
+                MaskedEditFieldRow(label: "Security Code", value: $draft.code)
             }
 
             DetailSectionCard("Notes") {

@@ -10,14 +10,19 @@ struct CustomFieldsEditSection: View {
 
     /// Binding into the parent draft's `customFields` array.
     @Binding var fields: [DraftCustomField]
+    let linkedFieldOptions: [LinkedFieldId]
 
     var body: some View {
-        DetailSectionCard("Custom Fields") {
+        DetailSectionCard(
+            "Custom Fields",
+            showsBackground: !fields.isEmpty
+        ) {
             ForEach(fields) { field in
                 if let index = fields.firstIndex(where: { $0.id == field.id }) {
                     if index > 0 { Divider() }
                     CustomFieldEditRow(
                         field: $fields[index],
+                        linkedFieldOptions: linkedFieldOptions,
                         canMoveUp: index > fields.startIndex,
                         canMoveDown: index < fields.index(before: fields.endIndex),
                         onMoveUp: {
@@ -38,18 +43,43 @@ struct CustomFieldsEditSection: View {
 
             if !fields.isEmpty { Divider() }
 
-            Button {
-                fields.append(DraftCustomField())
+            Menu {
+                Button("Text Field", systemImage: "textformat") {
+                    addField(type: .text)
+                }
+                Button("Hidden Field", systemImage: "eye.slash") {
+                    addField(type: .hidden)
+                }
+                Button("Boolean Field", systemImage: "checkmark.square") {
+                    addField(type: .boolean)
+                }
+                if !linkedFieldOptions.isEmpty {
+                    Button("Linked Field", systemImage: "link") {
+                        addField(type: .linked)
+                    }
+                }
             } label: {
                 Label("Add Custom Field", systemImage: "plus")
                     .font(Typography.fieldValue)
-                    .foregroundStyle(.tint)
+                    .foregroundStyle(Color.accentColor)
             }
-            .buttonStyle(.borderless)
-            .padding(.vertical, Spacing.rowVertical)
-            .padding(.horizontal, Spacing.rowHorizontal)
+            // `.button` + `.plain` keeps the label SwiftUI-rendered; the AppKit-backed
+            // `.borderlessButton` style draws its own bezel and forces primary text color.
+            .menuStyle(.button)
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
+            .padding(.vertical, fields.isEmpty ? 0 : Spacing.rowVertical)
+            .padding(.horizontal, fields.isEmpty ? 0 : Spacing.rowHorizontal)
             .accessibilityLabel("Add custom field")
         }
+    }
+
+    private func addField(type: CustomFieldType) {
+        fields.append(DraftCustomField(
+            value: type == .boolean ? "false" : nil,
+            type: type,
+            linkedId: type == .linked ? linkedFieldOptions.first : nil
+        ))
     }
 
     private func moveField(from sourceIndex: Int, to destinationIndex: Int) {
@@ -79,6 +109,7 @@ struct CustomFieldsEditSection: View {
 private struct CustomFieldEditRow: View {
 
     @Binding var field: DraftCustomField
+    let linkedFieldOptions: [LinkedFieldId]
     let canMoveUp: Bool
     let canMoveDown: Bool
     let onMoveUp: () -> Void
@@ -86,9 +117,8 @@ private struct CustomFieldEditRow: View {
     let onDropField: (String) -> Bool
     let onRemove: () -> Void
 
-    /// Controls reveal state for Hidden fields (masked by default - spec §4.9).
-    @State private var isRevealed = false
     @State private var isDropTargeted = false
+    @FocusState private var isSecretFieldFocused: Bool
     @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
@@ -124,11 +154,13 @@ private struct CustomFieldEditRow: View {
                     .accessibilityValue(field.value == "true" ? "True" : "False")
 
                 case .linked:
-                    // Linked fields are read-only by design - their value is derived
-                    // from another field and cannot be independently edited.
-                    Text(field.value ?? "-")
-                        .font(Typography.fieldValue)
-                        .foregroundStyle(.secondary)
+                    Picker("Linked Field", selection: $field.linkedId) {
+                        ForEach(linkedFieldOptions, id: \.self) { option in
+                            Text(option.displayName).tag(Optional(option))
+                        }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("\(accessibleFieldName) linked field")
 
                 default: // .text
                     TextField("Value", text: valueBinding)
@@ -141,14 +173,18 @@ private struct CustomFieldEditRow: View {
 
             if field.type == .hidden {
                 Button {
-                    isRevealed.toggle()
+                    isSecretFieldFocused.toggle()
                 } label: {
-                    Image(systemName: isRevealed ? "eye.slash" : "eye")
+                    Image(systemName: isSecretFieldFocused ? "eye.slash" : "eye")
                         .imageScale(.small)
                 }
                 .buttonStyle(.plain)
-                .help(isRevealed ? "Hide" : "Reveal")
-                .accessibilityLabel(isRevealed ? "Hide \(accessibleFieldName)" : "Reveal \(accessibleFieldName)")
+                .help(isSecretFieldFocused ? "Hide" : "Edit")
+                .accessibilityLabel(
+                    isSecretFieldFocused
+                        ? "Hide \(accessibleFieldName)"
+                        : "Edit \(accessibleFieldName)"
+                )
             }
 
             Button(action: onRemove) {
@@ -182,17 +218,21 @@ private struct CustomFieldEditRow: View {
 
     @ViewBuilder
     private var editableHiddenField: some View {
-        if isRevealed {
-            TextField("Value", text: valueBinding)
+        TextField("Value", text: valueBinding)
             .font(Typography.fieldValue.monospaced())
             .textFieldStyle(.plain)
+            .focused($isSecretFieldFocused)
+            .foregroundStyle(isSecretFieldFocused ? Color.primary : Color.clear)
+            .overlay(alignment: .leading) {
+                if !isSecretFieldFocused, field.value?.isEmpty == false {
+                    Text(MaskedFieldState.maskedPlaceholder)
+                        .font(Typography.fieldValue.monospaced())
+                        .foregroundStyle(.primary)
+                        .allowsHitTesting(false)
+                }
+            }
             .accessibilityLabel("\(accessibleFieldName) value")
-        } else {
-            SecureField("Value", text: valueBinding)
-                .font(Typography.fieldValue.monospaced())
-                .textFieldStyle(.plain)
-                .accessibilityLabel("\(accessibleFieldName) value")
-        }
+            .accessibilityValue(isSecretFieldFocused ? field.value ?? "" : "Hidden")
     }
 
     private var valueBinding: Binding<String> {

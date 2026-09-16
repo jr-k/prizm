@@ -10,6 +10,7 @@ import SwiftUI
 struct LoginEditForm: View {
 
     @Binding var draft: DraftLoginContent
+    let totpCodeGenerator: any TOTPCodeGenerating
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,6 +20,8 @@ struct LoginEditForm: View {
                 Divider()
                 MaskedEditFieldRow(label: "Password", value: $draft.password, generatorBinding: $draft.password)
             }
+
+            additionalFieldsSection
 
             DetailSectionCard("Websites") {
                 ForEach(draft.uris) { uri in
@@ -55,12 +58,183 @@ struct LoginEditForm: View {
                 .buttonStyle(.borderless)
                 .padding(.vertical, Spacing.rowVertical)
                 .padding(.horizontal, Spacing.rowHorizontal)
+                .accessibilityLabel("Add website")
             }
 
             DetailSectionCard("Notes") {
                 OptionalEditFieldRow(label: "Notes", value: $draft.notes)
             }
         }
+    }
+
+    private var additionalFieldsSection: some View {
+        DetailSectionCard(
+            "Additional Fields",
+            showsBackground: draft.totp != nil
+        ) {
+            if draft.totp != nil {
+                TOTPSecretEditView(
+                    configuration: Binding(
+                        get: { draft.totp ?? "" },
+                        set: { draft.totp = $0 }
+                    ),
+                    generator: totpCodeGenerator
+                )
+                Divider()
+                Button("Remove Authenticator", role: .destructive) {
+                    draft.totp = nil
+                }
+                .buttonStyle(.borderless)
+                .padding(.vertical, Spacing.rowVertical)
+                .padding(.horizontal, Spacing.rowHorizontal)
+                .accessibilityLabel("Remove authenticator")
+            }
+
+            if draft.totp == nil {
+                Button {
+                    draft.totp = ""
+                } label: {
+                    Label("Add Authenticator (TOTP)", systemImage: "plus")
+                        .font(Typography.fieldValue)
+                        .foregroundStyle(Color.accentColor)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add authenticator")
+            }
+        }
+    }
+}
+
+private struct TOTPSecretEditView: View {
+    @Binding var configuration: String
+    let generator: any TOTPCodeGenerating
+
+    @FocusState private var isFieldFocused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.fieldContentGap) {
+            Text("Authenticator Key")
+                .font(Typography.fieldLabel)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: Spacing.fieldActionGap) {
+                TextField("Base32 key or otpauth URI", text: $configuration)
+                    .font(Typography.fieldValue.monospaced())
+                    .textFieldStyle(.plain)
+                    .focused($isFieldFocused)
+                    .foregroundStyle(isFieldFocused ? Color.primary : Color.clear)
+                    .overlay(alignment: .leading) {
+                        if !isFieldFocused, !configuration.isEmpty {
+                            Text(MaskedFieldState.maskedPlaceholder)
+                                .font(Typography.fieldValue.monospaced())
+                                .foregroundStyle(.primary)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    .accessibilityLabel("Authenticator key")
+                    .accessibilityValue(isFieldFocused ? configuration : "Hidden")
+
+                Button {
+                    isFieldFocused.toggle()
+                } label: {
+                    Image(systemName: isFieldFocused ? "eye.slash" : "eye")
+                }
+                .buttonStyle(.plain)
+                .help(isFieldFocused ? "Hide" : "Edit")
+                .accessibilityLabel(isFieldFocused ? "Hide authenticator key" : "Edit authenticator key")
+            }
+
+            if !configuration.isEmpty {
+                TOTPCodeView(
+                    configuration: configuration,
+                    generator: generator,
+                    showsErrors: true
+                )
+            }
+        }
+        .padding(.vertical, Spacing.rowVertical)
+        .padding(.horizontal, Spacing.rowHorizontal)
+    }
+}
+
+struct TOTPCodeView: View {
+    let configuration: String
+    let generator: any TOTPCodeGenerating
+    var showsErrors = false
+    var onCopy: ((String) -> Void)? = nil
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            switch displayState(at: context.date) {
+            case .code(let code):
+                HStack(spacing: Spacing.fieldActionGap) {
+                    VStack(alignment: .leading, spacing: Spacing.fieldContentGap) {
+                        Text("One-Time Password")
+                            .font(Typography.fieldLabel)
+                            .foregroundStyle(.secondary)
+                        Text(formatted(code.value))
+                            .font(Typography.fieldValue.monospaced())
+                            .textSelection(.enabled)
+                    }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("One-time password \(code.value)")
+
+                    Spacer()
+
+                    Gauge(
+                        value: Double(code.period - code.secondsRemaining),
+                        in: 0...Double(code.period)
+                    ) {
+                        Text("Time remaining")
+                    } currentValueLabel: {
+                        Text("\(code.secondsRemaining)")
+                            .font(Typography.utility)
+                    }
+                    .gaugeStyle(.accessoryCircularCapacity)
+                    .controlSize(.small)
+                    .accessibilityLabel("Time remaining")
+                    .accessibilityValue("\(code.secondsRemaining) seconds")
+
+                    if let onCopy {
+                        Button {
+                            onCopy(code.value)
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(Typography.utility.weight(.semibold))
+                                .textCase(.uppercase)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Copy one-time password")
+                        .accessibilityLabel("Copy one-time password")
+                    }
+                }
+            case .error(let message):
+                if showsErrors {
+                    Text(message)
+                        .font(Typography.utility)
+                        .foregroundStyle(.red)
+                        .accessibilityLabel(message)
+                }
+            }
+        }
+    }
+
+    private func displayState(at date: Date) -> DisplayState {
+        do {
+            return .code(try generator.generateCode(from: configuration, at: date))
+        } catch {
+            return .error(error.localizedDescription)
+        }
+    }
+
+    private func formatted(_ code: String) -> String {
+        let midpoint = code.index(code.startIndex, offsetBy: code.count / 2)
+        return "\(code[..<midpoint]) \(code[midpoint...])"
+    }
+
+    private enum DisplayState {
+        case code(TOTPCode)
+        case error(String)
     }
 }
 

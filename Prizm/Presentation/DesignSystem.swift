@@ -198,4 +198,7 @@ enum LayoutMetrics {
 
     /// Height of text inputs on full-screen authentication flows.
     static let authenticationInputHeight: CGFloat = 36
+
+    /// Width of forms on full-screen authentication flows.
+    static let authenticationFormWidth: CGFloat = 440
 }

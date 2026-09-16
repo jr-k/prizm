@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -138,6 +139,20 @@ struct ItemEditView: View {
                     customFieldsEditForm
                 }
             }
+            .background {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        dismissFieldFocus()
+                    }
+            }
+        }
+        .background {
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    dismissFieldFocus()
+                }
         }
         .toolbar {
             if !viewModel.isEditing {
@@ -236,13 +251,16 @@ struct ItemEditView: View {
         switch viewModel.draft.content {
         case .login(let content):
             // Use a local binding projected from the draft's associated value.
-            LoginEditForm(draft: Binding(
-                get:  {
-                    guard case .login(let c) = viewModel.draft.content else { return content }
-                    return c
-                },
-                set:  { newContent in viewModel.draft.content = .login(newContent) }
-            ))
+            LoginEditForm(
+                draft: Binding(
+                    get:  {
+                        guard case .login(let c) = viewModel.draft.content else { return content }
+                        return c
+                    },
+                    set:  { newContent in viewModel.draft.content = .login(newContent) }
+                ),
+                totpCodeGenerator: viewModel.totpCodeGenerator
+            )
 
         case .card(let content):
             CardEditForm(draft: Binding(
@@ -286,7 +304,30 @@ struct ItemEditView: View {
         CustomFieldsEditSection(fields: Binding(
             get: { viewModel.draft.content.customFields },
             set: { viewModel.draft.content.customFields = $0 }
-        ))
+        ), linkedFieldOptions: linkedFieldOptions)
+    }
+
+    private var linkedFieldOptions: [LinkedFieldId] {
+        switch viewModel.draft.content {
+        case .login:
+            [.loginUsername, .loginPassword]
+        case .card:
+            [
+                .cardCardholderName, .cardExpMonth, .cardExpYear, .cardCode,
+                .cardBrand, .cardNumber
+            ]
+        case .identity:
+            [
+                .identityTitle, .identityMiddleName, .identityAddress1,
+                .identityAddress2, .identityAddress3, .identityCity,
+                .identityState, .identityPostalCode, .identityCountry,
+                .identityCompany, .identityEmail, .identityPhone, .identitySsn,
+                .identityUsername, .identityPassportNumber, .identityLicenseNumber,
+                .identityFirstName, .identityLastName, .identityFullName
+            ]
+        case .secureNote, .sshKey:
+            []
+        }
     }
 
     // MARK: - Discard logic
@@ -301,6 +342,13 @@ struct ItemEditView: View {
         } else {
             viewModel.discard()
         }
+    }
+
+    /// SwiftUI on macOS keeps a TextField as first responder after background clicks.
+    /// AppKit is used narrowly here because SwiftUI has no parent-level action that can
+    /// clear focus owned by independent descendant `FocusState` values.
+    private func dismissFieldFocus() {
+        NSApp.keyWindow?.makeFirstResponder(nil)
     }
 }
 
