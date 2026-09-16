@@ -31,6 +31,7 @@ struct FieldRowView: View {
     @State private var showLargeType = false
     @State private var copyFeedbackTask: Task<Void, Never>?
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.isHoverSuppressed) private var isHoverSuppressed
     @Environment(\.openURL) private var openURL
     @Environment(SecretVisibilityState.self) private var secretVisibility
 
@@ -84,8 +85,11 @@ struct FieldRowView: View {
         .onTapGesture { performPrimaryAction() }
         .onHover { hovering in
             optionalAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
+                isHovered = hovering && !isHoverSuppressed
             }
+        }
+        .onChange(of: isHoverSuppressed) { _, suppressed in
+            if suppressed { isHovered = false }
         }
         .overlay(alignment: .topTrailing) {
             if showCopied {

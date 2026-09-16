@@ -52,61 +52,53 @@ struct VaultBrowserView: View {
                     TapGesture().onEnded { dismissSearchSuggestions() }
                 )
         } detail: {
-            GeometryReader { detailGeometry in
-                VStack(spacing: 0) {
-                    sharedSearchBar
-                    Divider()
-                        .overlay(DesignColor.paneDivider)
-                    HSplitView {
-                        itemListPane
-                            .frame(
-                                minWidth: VaultLayoutMetrics.itemListMinimumWidth,
-                                idealWidth: VaultLayoutMetrics.itemListIdealWidth,
-                                maxWidth: VaultLayoutMetrics.itemListMaximumWidth
-                            )
-                        detailPane
-                            .frame(minWidth: VaultLayoutMetrics.detailMinimumWidth)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .allowsHitTesting(!shouldShowSearchSuggestions)
-                    .simultaneousGesture(
-                        TapGesture().onEnded { dismissSearchSuggestions() }
-                    )
-                    .overlay(alignment: .topLeading) {
-                        if shouldShowSearchSuggestions {
-                            ZStack(alignment: .topLeading) {
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        dismissSearchSuggestions()
-                                    }
-                                    .accessibilityHidden(true)
+            VStack(spacing: 0) {
+                sharedSearchBar
+                Divider()
+                    .overlay(DesignColor.paneDivider)
+                HSplitView {
+                    itemListPane
+                        .frame(
+                            minWidth: VaultLayoutMetrics.itemListMinimumWidth,
+                            idealWidth: VaultLayoutMetrics.itemListIdealWidth,
+                            maxWidth: VaultLayoutMetrics.itemListMaximumWidth
+                        )
+                    detailPane
+                        .frame(minWidth: VaultLayoutMetrics.detailMinimumWidth)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // Not `allowsHitTesting(false)`: toggling it on this AppKit-backed subtree
+                // re-hosts the list and shifted it under the sidebar. Clicks outside the
+                // dropdown are swallowed by the backdrop in the overlay below; hover
+                // feedback is muted via the environment (see `HoverSuppressedKey`).
+                .environment(\.isHoverSuppressed, shouldShowSearchSuggestions)
+                .simultaneousGesture(
+                    TapGesture().onEnded { dismissSearchSuggestions() }
+                )
+                .overlay(alignment: .topLeading) {
+                    if shouldShowSearchSuggestions {
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    dismissSearchSuggestions()
+                                }
+                                .accessibilityHidden(true)
 
-                                searchSuggestionsDropdown
-                                    .padding(.horizontal, Spacing.rowHorizontal)
-                                    .containerRelativeFrame(.horizontal) { width, _ in
-                                        width * VaultLayoutMetrics.searchSuggestionsWidthRatio
-                                    }
-                            }
+                            searchSuggestionsDropdown
+                                .padding(.horizontal, Spacing.rowHorizontal)
+                                .containerRelativeFrame(.horizontal) { width, _ in
+                                    width * VaultLayoutMetrics.searchSuggestionsWidthRatio
+                                }
                         }
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                // On macOS 26 the sidebar floats over the detail column and exposes its width
-                // as a leading safe-area inset. `List`/`ScrollView` automatically extend their
-                // scroll content into that inset, which gave the item list a hidden horizontal
-                // scroll range under the sidebar. Consume the inset here as plain padding so
-                // descendants see no leading safe area and stay flush with the column edge.
-                .padding(.leading, detailGeometry.safeAreaInsets.leading)
-                // The window uses `.hiddenTitleBar`, so the title bar only hosts the traffic
-                // lights (over the sidebar). Let the search bar row reclaim that strip on the
-                // detail side so content starts flush with the top edge of the window.
-                //
-                // `ignoresSafeArea` must sit on this child, not on the `GeometryReader`: a
-                // reader that ignores the safe area reports zero insets, and the padding
-                // above would collapse (the search bar then spills under the sidebar).
-                .ignoresSafeArea(.container, edges: [.top, .leading])
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            // The window uses `.hiddenTitleBar`, so the title bar only hosts the traffic
+            // lights (over the sidebar). Let the search bar row reclaim that strip on the
+            // detail side so content starts flush with the top edge of the window.
+            .ignoresSafeArea(.container, edges: .top)
         }
         .navigationSplitViewStyle(.balanced)
         // `.hidden` with an explicit `.windowToolbar` placement leaves the split view's

@@ -36,6 +36,7 @@ struct ItemListView: View {
     @State private var searchSortOrder: ItemSearchSortOrder = .nameAscending
     @State private var hoveredItemID: String?
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.isHoverSuppressed) private var isHoverSuppressed
 
     private var visibleItems: [VaultItem] {
         let filtered = if let searchTypeFilter {
@@ -116,7 +117,7 @@ struct ItemListView: View {
                                         .draggable(item.id)
                                         .onHover { hovering in
                                             optionalAnimation(.easeInOut(duration: 0.15)) {
-                                                if hovering {
+                                                if hovering && !isHoverSuppressed {
                                                     hoveredItemID = item.id
                                                 } else if hoveredItemID == item.id {
                                                     hoveredItemID = nil
@@ -199,6 +200,9 @@ struct ItemListView: View {
                     }
                     .onChange(of: visibleItems.map(\.id)) {
                         scrollToSelection(using: proxy)
+                    }
+                    .onChange(of: isHoverSuppressed) { _, suppressed in
+                        if suppressed { hoveredItemID = nil }
                     }
                     .onDeleteCommand {
                         requestSelectedItemsDeletion()
@@ -360,11 +364,7 @@ struct ItemListView: View {
         Task { @MainActor in
             await Task.yield()
             withAnimation {
-                // A `nil` anchor scrolls the minimum amount to reveal the row. A `.center`
-                // anchor applies to both axes: on macOS 26 the list's scroll content extends
-                // under the floating sidebar (leading safe area), so centring also scrolled
-                // horizontally and dragged every row to the left, under the sidebar.
-                proxy.scrollTo(selectedID, anchor: nil)
+                proxy.scrollTo(selectedID, anchor: .center)
             }
         }
     }

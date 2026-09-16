@@ -19,6 +19,7 @@ struct AttachmentRowView: View {
 
     @State private var isHovered = false
     @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.isHoverSuppressed) private var isHoverSuppressed
 
     var body: some View {
         Group {
@@ -41,8 +42,11 @@ struct AttachmentRowView: View {
         .contentShape(Rectangle())
         .onHover { hovering in
             optionalAnimation(.easeInOut(duration: 0.15)) {
-                isHovered = hovering
+                isHovered = hovering && !isHoverSuppressed
             }
+        }
+        .onChange(of: isHoverSuppressed) { _, suppressed in
+            if suppressed { isHovered = false }
         }
         .accessibilityIdentifier(AccessibilityID.Attachment.row(attachment.id))
     }
