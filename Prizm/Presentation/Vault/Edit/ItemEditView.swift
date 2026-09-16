@@ -203,6 +203,7 @@ struct ItemEditView: View {
             handleDiscard()
         }
         .disabled(viewModel.isSaving)
+        .keyboardShortcut(.cancelAction)
         .help("Discard changes (Esc)")
         .accessibilityIdentifier(AccessibilityID.Edit.discardButton)
     }
