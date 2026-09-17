@@ -38,6 +38,7 @@ struct VaultBrowserView: View {
     @State private var isShowAllSearchHovered = false
     @State private var pendingItemSelectionIDs: Set<String>?
     @State private var editCloseTrigger = 0
+    @State private var createViewModel: ItemEditViewModel?
     @FocusState private var isSearchFieldFocused: Bool
     @AppStorage(PreferenceKeys.organizationExplorerLayout)
     private var organizationExplorerLayout: OrganizationExplorerLayout = .tree
@@ -492,39 +493,50 @@ struct VaultBrowserView: View {
 
     private var detailPane: some View {
         VStack(spacing: 0) {
-            if let item = viewModel.itemSelection, !viewModel.isEditingItem {
-                detailActionBar(for: item)
-            }
-
-            ItemDetailView(
-                item:                           viewModel.itemSelection,
-                faviconLoader:                  faviconLoader,
-                totpCodeGenerator:              totpCodeGenerator,
-                folders:                        viewModel.folders,
-                organizations:                  viewModel.organizations,
-                onCopy:                         { viewModel.copy($0) },
-                makeEditViewModel:              makeEditViewModel,
-                makeAddAttachmentViewModel:     makeAddAttachmentViewModel,
-                makeBatchAttachmentViewModel:   makeBatchAttachmentViewModel,
-                makeAttachmentRowViewModel:     makeAttachmentRowViewModel,
-                onAttachmentsChanged:           { viewModel.refreshItemSelection() },
-                onEditModeChanged:              { isEditing in
-                    viewModel.setItemEditing(isEditing)
-                    if !isEditing, let pendingItemSelectionIDs {
-                        self.pendingItemSelectionIDs = nil
-                        viewModel.updateItemSelection(pendingItemSelectionIDs)
+            if let createViewModel {
+                ItemEditView(
+                    viewModel: createViewModel,
+                    onClose: closeCreateEditor,
+                    closeTrigger: editCloseTrigger,
+                    onCloseRequestCancelled: {
+                        pendingItemSelectionIDs = nil
                     }
-                },
-                onSoftDelete:                   { id in await viewModel.performSoftDelete(id: id) },
-                onRestore:                      { id in await viewModel.performRestore(id: id) },
-                onPermanentDelete:              { id in await viewModel.performPermanentDelete(id: id) },
-                editTrigger:                    viewModel.editTrigger,
-                saveTrigger:                    viewModel.saveTrigger,
-                editCloseTrigger:               editCloseTrigger,
-                onEditCloseRequestCancelled:    {
-                    pendingItemSelectionIDs = nil
+                )
+            } else {
+                if let item = viewModel.itemSelection, !viewModel.isEditingItem {
+                    detailActionBar(for: item)
                 }
-            )
+
+                ItemDetailView(
+                    item:                           viewModel.itemSelection,
+                    faviconLoader:                  faviconLoader,
+                    totpCodeGenerator:              totpCodeGenerator,
+                    folders:                        viewModel.folders,
+                    organizations:                  viewModel.organizations,
+                    onCopy:                         { viewModel.copy($0) },
+                    makeEditViewModel:              makeEditViewModel,
+                    makeAddAttachmentViewModel:     makeAddAttachmentViewModel,
+                    makeBatchAttachmentViewModel:   makeBatchAttachmentViewModel,
+                    makeAttachmentRowViewModel:     makeAttachmentRowViewModel,
+                    onAttachmentsChanged:           { viewModel.refreshItemSelection() },
+                    onEditModeChanged:              { isEditing in
+                        viewModel.setItemEditing(isEditing)
+                        if !isEditing, let pendingItemSelectionIDs {
+                            self.pendingItemSelectionIDs = nil
+                            viewModel.updateItemSelection(pendingItemSelectionIDs)
+                        }
+                    },
+                    onSoftDelete:                   { id in await viewModel.performSoftDelete(id: id) },
+                    onRestore:                      { id in await viewModel.performRestore(id: id) },
+                    onPermanentDelete:              { id in await viewModel.performPermanentDelete(id: id) },
+                    editTrigger:                    viewModel.editTrigger,
+                    saveTrigger:                    viewModel.saveTrigger,
+                    editCloseTrigger:               editCloseTrigger,
+                    onEditCloseRequestCancelled:    {
+                        pendingItemSelectionIDs = nil
+                    }
+                )
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -615,6 +627,17 @@ struct VaultBrowserView: View {
                 AccessibilityNotification.Announcement(error).post()
             }
         }
+        .onChange(of: viewModel.createItemType) { _, type in
+            guard let type else { return }
+            createViewModel = makeCreateViewModel(
+                type,
+                viewModel.selectedCollectionId ?? viewModel.selectedFolderId
+            )
+            viewModel.setItemEditing(true)
+        }
+        .onChange(of: viewModel.saveTrigger) {
+            createViewModel?.save()
+        }
         .background {
             Button("") {
                 isSearchFieldFocused = true
@@ -622,14 +645,6 @@ struct VaultBrowserView: View {
             .keyboardShortcut("f", modifiers: .command)
             .frame(width: 0, height: 0)
             .opacity(0)
-        }
-        .sheet(item: $viewModel.createItemType) { type in
-            ItemEditView(
-                viewModel: makeCreateViewModel(type,
-                    viewModel.selectedCollectionId ?? viewModel.selectedFolderId),
-                onClose: { viewModel.createItemType = nil }
-            )
-            .frame(minWidth: 480, minHeight: 400)
         }
         .sheet(item: $detailMoveViewModel) { transferViewModel in
             MoveItemSheet(viewModel: transferViewModel)
@@ -639,6 +654,16 @@ struct VaultBrowserView: View {
         }
         .onDisappear {
             secretVisibility.concealAll()
+        }
+    }
+
+    private func closeCreateEditor() {
+        createViewModel = nil
+        viewModel.createItemType = nil
+        viewModel.setItemEditing(false)
+        if let pendingItemSelectionIDs {
+            self.pendingItemSelectionIDs = nil
+            viewModel.updateItemSelection(pendingItemSelectionIDs)
         }
     }
 

@@ -75,6 +75,7 @@ struct SearchableSelectPopover<Value: Hashable>: View {
 
     @State private var query = ""
     @State private var highlightedValue: Value?
+    @State private var scrollsToHighlightedValue = false
     @FocusState private var isSearchFocused: Bool
 
     private var filteredOptions: [SearchableSelectOption<Value>] {
@@ -135,7 +136,8 @@ struct SearchableSelectPopover<Value: Hashable>: View {
                 }
                 .frame(maxHeight: LayoutMetrics.searchableSelectResultsHeight)
                 .onChange(of: highlightedValue) { _, value in
-                    guard let value else { return }
+                    guard scrollsToHighlightedValue, let value else { return }
+                    scrollsToHighlightedValue = false
                     withAnimation {
                         proxy.scrollTo(value, anchor: .center)
                     }
@@ -144,12 +146,14 @@ struct SearchableSelectPopover<Value: Hashable>: View {
         }
         .frame(width: LayoutMetrics.searchableSelectWidth)
         .onAppear {
+            scrollsToHighlightedValue = true
             highlightedValue = filteredOptions.contains { $0.value == selection }
                 ? selection
                 : filteredOptions.first?.value
             isSearchFocused = true
         }
         .onChange(of: query) {
+            scrollsToHighlightedValue = true
             highlightedValue = filteredOptions.first?.value
         }
         .onMoveCommand { direction in
@@ -193,6 +197,7 @@ struct SearchableSelectPopover<Value: Hashable>: View {
         .accessibilityValue(selection == option.value ? "Selected" : "")
         .onHover { isHovering in
             if isHovering {
+                scrollsToHighlightedValue = false
                 highlightedValue = option.value
             }
         }
@@ -210,6 +215,7 @@ struct SearchableSelectPopover<Value: Hashable>: View {
         } else {
             nextIndex = max((currentIndex ?? filteredOptions.count) - 1, 0)
         }
+        scrollsToHighlightedValue = true
         highlightedValue = filteredOptions[nextIndex].value
     }
 

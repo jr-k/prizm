@@ -97,7 +97,7 @@ final class VaultBrowserViewModel: ObservableObject {
     }
     @Published private(set) var lastSyncedAt: Date?
     @Published var syncErrorMessage: String? = nil
-    /// Reflects whether the edit sheet is currently open. Used by `MenuBarViewModel`
+    /// Reflects whether an inline item form is currently open. Used by `MenuBarViewModel`
     /// to enable/disable the Edit and Save menu bar actions.
     @Published private(set) var isEditingItem: Bool = false
 
@@ -107,7 +107,7 @@ final class VaultBrowserViewModel: ObservableObject {
     /// The Presentation layer surfaces this as an alert.
     @Published var actionError: String? = nil
 
-    /// Set to a non-nil `ItemType` to present the create sheet for that type.
+    /// Set to a non-nil `ItemType` to present the inline creation form for that type.
     /// Automatically cleared if the user switches to Trash.
     @Published var createItemType: ItemType? = nil {
         didSet {

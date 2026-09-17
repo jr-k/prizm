@@ -4,10 +4,9 @@ import UniformTypeIdentifiers
 
 // MARK: - ItemEditView
 
-/// Form used inline for existing items and in a sheet for item creation.
+/// Form used inline for existing items and item creation.
 ///
-/// Existing items show an editing banner with Cancel and Save actions inside the detail
-/// pane. Creation keeps native sheet toolbar actions.
+/// The header exposes Cancel/Discard and Save actions inside the detail pane.
 ///
 /// Keyboard shortcuts:
 /// - ⌘S: Save (wired via `.keyboardShortcut` on the Save button)
@@ -28,9 +27,7 @@ struct ItemEditView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if viewModel.isEditing {
-                editingHeader
-            }
+            formHeader
 
             // Error banner - shown when a save fails; dismisses on retry.
             if let error = viewModel.saveError {
@@ -153,14 +150,6 @@ struct ItemEditView: View {
                     dismissFieldFocus()
                 }
         }
-        .toolbar {
-            if !viewModel.isEditing {
-                ToolbarItemGroup(placement: .primaryAction) {
-                    discardButton
-                    saveButton
-                }
-            }
-        }
         // Esc key invokes the same discard logic as the Discard button (spec §8.3).
         .onExitCommand {
             handleDiscard()
@@ -211,7 +200,7 @@ struct ItemEditView: View {
         }
     }
 
-    private var editingHeader: some View {
+    private var formHeader: some View {
         HStack(spacing: Spacing.headerGap) {
             ItemLocationBreadcrumb(
                 vaultName: viewModel.draft.organizationId.map { organizationID in
@@ -228,7 +217,10 @@ struct ItemEditView: View {
 
             Spacer()
 
-            Label("Editing", systemImage: "pencil")
+            Label(
+                viewModel.isEditing ? "Editing" : "New Item",
+                systemImage: viewModel.isEditing ? "pencil" : "plus"
+            )
                 .font(Typography.progressLabel)
                 .accessibilityAddTraits(.isHeader)
             discardButton
